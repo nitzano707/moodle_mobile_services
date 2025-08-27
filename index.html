@@ -899,4 +899,588 @@
             }
         });
 
-        async function connectWithToken
+        async function connectWithToken() {
+            const token = document.getElementById('tokenInput').value.trim();
+            const connectBtn = document.getElementById('tokenConnectBtn');
+            
+            if (!token) {
+                showError('נא להזין Token');
+                return;
+            }
+
+            await performConnection(token, connectBtn);
+        }
+
+        async function connectWithCredentials() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+            const connectBtn = document.getElementById('credentialsConnectBtn');
+            
+            if (!username || !password) {
+                showError('נא למלא שם משתמש וסיסמה');
+                return;
+            }
+
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'מתחבר...';
+            
+            try {
+                const token = await moodleClient.getToken(username, password);
+                await performConnection(token, connectBtn);
+            } catch (error) {
+                showError(`שגיאה בהתחברות: ${error.message}`);
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'התחבר עם שם משתמש';
+            }
+        }
+
+        async function performConnection(token, button) {
+            button.disabled = true;
+            const originalText = button.textContent;
+            button.textContent = 'מתחבר...';
+            
+            try {
+                moodleClient.token = token;
+                const userInfo = await moodleClient.getUserInfo();
+                
+                localStorage.setItem('moodle_token', token);
+                
+                displayUserInfo(userInfo);
+                await loadInitialData();
+                
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('dashboard').classList.add('show');
+                document.getElementById('userInfo').classList.add('show');
+                document.getElementById('logoutBtn').classList.add('show');
+                
+                showSuccess('התחברת בהצלחה למערכת!');
+                
+            } catch (error) {
+                showError(`שגיאה בהתחברות: ${error.message}`);
+                localStorage.removeItem('moodle_token');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        function displayUserInfo(userInfo) {
+            document.getElementById('userName').textContent = userInfo.fullname || 'מרצה';
+            document.getElementById('userEmail').textContent = userInfo.username || '';
+            document.getElementById('userAvatar').textContent = (userInfo.fullname || 'M').charAt(0).toUpperCase();
+        }
+
+        async function loadInitialData() {
+            showLoading(true);
+            
+            try {
+                moodleClient.courses = await moodleClient.getCourses();
+                updateFilters();
+                
+                if (moodleClient.courses.length > 0) {
+                    const courseIds = moodleClient.courses.map(course => course.id);
+                    const assignmentsData = await moodleClient.getAssignments(courseIds);
+                    moodleClient.assignments = assignmentsData.courses || [];
+                    
+                    // טעינת סטודנטים
+                    moodleClient.students = [];
+                    for (const course of moodleClient.courses) {
+                        try {
+                            const courseStudents = await moodleClient.getCourseStudents(course.id);
+                            courseStudents.forEach(student => {
+                                student.courseid = course.id;
+                                student.coursename = course.fullname;
+                            });
+                            moodleClient.students.push(...courseStudents);
+                        } catch (error) {
+                            console.warn(`Failed to load students for course ${course.id}:`, error);
+                        }
+                    }
+                }
+                
+                displayContent();
+                
+            } catch (error) {
+                showError(`שגיאה בטעינת הנתונים: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateFilters() {
+            const yearFilter = document.getElementById('yearFilter');
+            const courseFilter = document.getElementById('courseFilter');
+            
+            yearFilter.innerHTML = '<option value="">כל השנים</option>';
+            courseFilter.innerHTML = '<option value="">כל הקורסים</option>';
+            
+            // הוספת שנים
+            const years = new Set();
+            moodleClient.courses.forEach(course => {
+                const year = new Date(course.startdate * 1000).getFullYear();
+                years.add(year);
+            });
+            
+            Array.from(years).sort((a, b) => b - a).forEach(year => {
+                yearFilter.innerHTML += `<option value="${year}">${year}</option>`;
+            });
+            
+            // הוספת קורסים
+            moodleClient.courses.forEach(course => {
+                courseFilter.innerHTML += `<option value="${course.id}">${course.fullname}</option>`;
+            });
+        }
+
+        function showTab(tabName) {
+            currentTab = tabName;
+            
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`button[onclick="showTab('${tabName}')"]`).classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+            
+            displayContent();
+        }
+
+        function displayContent() {
+            switch(currentTab) {
+                case 'courses':
+                    displayCourses();
+                    break;
+                case 'assignments':
+                    displayAssignments();
+                    break;
+                case 'submissions':
+                    displaySubmissions();
+                    break;
+                case 'students':
+                    displayStudents();
+                    break;
+            }
+        }
+
+        function displayCourses() {
+            const container = document.getElementById('coursesContent');
+            container.innerHTML = '';
+            
+            const filteredCourses = getFilteredCourses();
+            
+            if (filteredCourses.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 40px;">לא נמצאו קורסים</p>';
+                return;
+            }
+            
+            filteredCourses.forEach(course => {
+                const courseCard = document.createElement('div');
+                courseCard.className = 'course-card';
+                
+                const startDate = new Date(course.startdate * 1000);
+                const endDate = course.enddate ? new Date(course.enddate * 1000) : null;
+                
+                // סטטיסטיקות הקורס
+                const courseStudents = moodleClient.students.filter(s => s.courseid === course.id);
+                const courseAssignments = moodleClient.assignments.find(a => a.id === course.id);
+                const assignmentCount = courseAssignments ? courseAssignments.assignments.length : 0;
+                
+                courseCard.innerHTML = `
+                    <h3>${course.fullname}</h3>
+                    <p><strong>קוד קורס:</strong> ${course.shortname}</p>
+                    <p><strong>תאריך התחלה:</strong> ${startDate.toLocaleDateString('he-IL')}</p>
+                    ${endDate ? `<p><strong>תאריך סיום:</strong> ${endDate.toLocaleDateString('he-IL')}</p>` : ''}
+                    
+                    <div class="course-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">${courseStudents.length}</div>
+                            <div class="stat-label">סטודנטים</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${assignmentCount}</div>
+                            <div class="stat-label">מטלות</div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(courseCard);
+            });
+        }
+
+        function displayAssignments() {
+            const container = document.getElementById('assignmentsContent');
+            container.innerHTML = '';
+            
+            const filteredAssignments = getFilteredAssignments();
+            
+            if (filteredAssignments.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 40px;">לא נמצאו מטלות</p>';
+                return;
+            }
+            
+            filteredAssignments.forEach(assignment => {
+                const assignmentCard = document.createElement('div');
+                assignmentCard.className = 'assignment-card';
+                
+                const dueDate = assignment.duedate ? new Date(assignment.duedate * 1000) : null;
+                const course = moodleClient.courses.find(c => c.id === assignment.course);
+                
+                // חישוב סטטיסטיקות הגשות
+                const totalStudents = moodleClient.students.filter(s => s.courseid === assignment.course).length;
+                
+                assignmentCard.innerHTML = `
+                    <div class="assignment-header">
+                        <div>
+                            <div class="assignment-title">${assignment.name}</div>
+                            <p style="color: #7f8c8d; margin-top: 5px;">${course ? course.fullname : 'קורס לא מוגדר'}</p>
+                        </div>
+                        <div class="assignment-stats">
+                            <div class="stat-badge">${totalStudents} סטודנטים</div>
+                            <div class="stat-badge submitted">0 הגישו</div>
+                            <div class="stat-badge graded">0 נבדקו</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px; color: #7f8c8d;">
+                        ${dueDate ? `<p><strong>מועד הגשה:</strong> ${dueDate.toLocaleDateString('he-IL')} ${dueDate.toLocaleTimeString('he-IL')}</p>` : '<p><strong>מועד הגשה:</strong> ללא מועד קבוע</p>'}
+                        <p><strong>ציון מקסימלי:</strong> ${assignment.grade || 100}</p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong>הוראות המטלה:</strong>
+                        <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 5px;">
+                            ${assignment.intro || 'אין הוראות נוספות'}
+                        </div>
+                    </div>
+                    
+                    <button class="btn" onclick="loadAssignmentSubmissions(${assignment.id})">צפה בהגשות</button>
+                `;
+                
+                container.appendChild(assignmentCard);
+            });
+        }
+
+        async function loadAssignmentSubmissions(assignmentId) {
+            showLoading(true);
+            
+            try {
+                const submissionsData = await moodleClient.getSubmissions(assignmentId);
+                const assignment = getAssignmentById(assignmentId);
+                
+                // מעבר לטאב הגשות
+                showTab('submissions');
+                displayAssignmentSubmissions(assignment, submissionsData);
+                
+            } catch (error) {
+                showError(`שגיאה בטעינת ההגשות: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayAssignmentSubmissions(assignment, submissionsData) {
+            const container = document.getElementById('submissionsContent');
+            container.innerHTML = '';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.innerHTML = `
+                <h2 style="color: #2c3e50; margin-bottom: 20px;">הגשות עבור: ${assignment.name}</h2>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <p><strong>ציון מקסימלי:</strong> ${assignment.grade || 100}</p>
+                    <p><strong>מועד הגשה:</strong> ${assignment.duedate ? new Date(assignment.duedate * 1000).toLocaleDateString('he-IL') : 'ללא מועד'}</p>
+                </div>
+            `;
+            container.appendChild(headerDiv);
+            
+            if (!submissionsData.assignments || submissionsData.assignments.length === 0) {
+                container.innerHTML += '<p style="text-align: center; color: #7f8c8d; padding: 40px;">לא נמצאו הגשות</p>';
+                return;
+            }
+            
+            const assignmentData = submissionsData.assignments[0];
+            const submissions = assignmentData.submissions || [];
+            
+            if (submissions.length === 0) {
+                container.innerHTML += '<p style="text-align: center; color: #7f8c8d; padding: 40px;">לא נמצאו הגשות</p>';
+                return;
+            }
+            
+            const submissionsGrid = document.createElement('div');
+            submissionsGrid.className = 'submissions-grid';
+            
+            submissions.forEach(submission => {
+                const student = moodleClient.students.find(s => s.id === submission.userid);
+                const submissionCard = document.createElement('div');
+                submissionCard.className = 'submission-card';
+                
+                const submissionDate = submission.timemodified ? 
+                    new Date(submission.timemodified * 1000).toLocaleString('he-IL') : 'לא הוגש';
+                
+                const isLate = assignment.duedate && submission.timemodified && 
+                    (submission.timemodified * 1000) > (assignment.duedate * 1000);
+                
+                let statusClass = 'status-not-submitted';
+                let statusText = 'לא הוגש';
+                
+                if (submission.status === 'submitted') {
+                    statusClass = submission.gradingstatus === 'graded' ? 'status-graded' : 'status-submitted';
+                    statusText = submission.gradingstatus === 'graded' ? 'נבדק' : 'הוגש';
+                }
+                
+                let filesHtml = '';
+                if (submission.plugins) {
+                    submission.plugins.forEach(plugin => {
+                        if (plugin.type === 'file' && plugin.fileareas) {
+                            plugin.fileareas.forEach(filearea => {
+                                if (filearea.files) {
+                                    filearea.files.forEach(file => {
+                                        const downloadUrl = moodleClient.getFileDownloadUrl(file.fileurl);
+                                        filesHtml += `
+                                            <a href="${downloadUrl}" class="file-link" target="_blank">
+                                                📎 ${file.filename}
+                                            </a>
+                                        `;
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                submissionCard.innerHTML = `
+                    <div class="student-name">${student ? student.fullname : `משתמש ${submission.userid}`}</div>
+                    
+                    <div class="submission-status">
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                        ${isLate ? '<span class="status-badge" style="background: #e74c3c; color: white;">איחור</span>' : ''}
+                    </div>
+                    
+                    <p style="font-size: 0.9rem; color: #7f8c8d; margin: 10px 0;">
+                        <strong>תאריך הגשה:</strong> ${submissionDate}
+                    </p>
+                    
+                    ${filesHtml ? `<div class="file-links">${filesHtml}</div>` : ''}
+                    
+                    <div class="grade-form">
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                            <label style="font-weight: bold;">ציון:</label>
+                            <input type="number" 
+                                   class="grade-input" 
+                                   id="grade-${submission.userid}"
+                                   min="0" 
+                                   max="${assignment.grade || 100}"
+                                   value="${submission.grade || ''}"
+                                   placeholder="0-${assignment.grade || 100}">
+                            <span style="color: #7f8c8d;">/ ${assignment.grade || 100}</span>
+                        </div>
+                        
+                        <textarea 
+                            id="feedback-${submission.userid}"
+                            placeholder="משוב למטלה..."
+                            style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;"
+                        >${submission.plugins ? getSubmissionFeedback(submission.plugins) : ''}</textarea>
+                        
+                        <button class="btn success" 
+                                onclick="saveStudentGrade(${assignment.id}, ${submission.userid})"
+                                style="margin-top: 10px; padding: 8px 15px; font-size: 0.9rem;">
+                            שמור ציון
+                        </button>
+                    </div>
+                `;
+                
+                submissionsGrid.appendChild(submissionCard);
+            });
+            
+            container.appendChild(submissionsGrid);
+        }
+
+        function getSubmissionFeedback(plugins) {
+            for (const plugin of plugins) {
+                if (plugin.type === 'comments' && plugin.editorfields) {
+                    for (const field of plugin.editorfields) {
+                        if (field.name === 'assignfeedbackcomments_editor' && field.text) {
+                            return field.text;
+                        }
+                    }
+                }
+            }
+            return '';
+        }
+
+        async function saveStudentGrade(assignmentId, userId) {
+            const gradeInput = document.getElementById(`grade-${userId}`);
+            const feedbackInput = document.getElementById(`feedback-${userId}`);
+            
+            const grade = gradeInput.value;
+            const feedback = feedbackInput.value;
+            
+            if (!grade || grade < 0) {
+                showError('נא להזין ציון תקין');
+                return;
+            }
+            
+            try {
+                await moodleClient.saveGrade(assignmentId, userId, grade, feedback);
+                showSuccess('הציון נשמר בהצלחה!');
+            } catch (error) {
+                showError(`שגיאה בשמירת הציון: ${error.message}`);
+            }
+        }
+
+        function displaySubmissions() {
+            const container = document.getElementById('submissionsContent');
+            container.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 40px;">נא לבחור מטלה מטאב "מטלות" כדי לראות הגשות</p>';
+        }
+
+        function displayStudents() {
+            const container = document.getElementById('studentsContent');
+            container.innerHTML = '';
+            
+            if (moodleClient.students.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #7f8c8d; padding: 40px;">לא נמצאו סטודנטים</p>';
+                return;
+            }
+            
+            // קיבוץ סטודנטים לפי קורס
+            const studentsByCourse = {};
+            moodleClient.students.forEach(student => {
+                if (!studentsByCourse[student.courseid]) {
+                    studentsByCourse[student.courseid] = [];
+                }
+                studentsByCourse[student.courseid].push(student);
+            });
+            
+            Object.entries(studentsByCourse).forEach(([courseId, students]) => {
+                const course = moodleClient.courses.find(c => c.id == courseId);
+                if (!course) return;
+                
+                const courseSection = document.createElement('div');
+                courseSection.innerHTML = `
+                    <h3 style="color: #2c3e50; margin: 30px 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #ecf0f1;">
+                        ${course.fullname} (${students.length} סטודנטים)
+                    </h3>
+                `;
+                
+                const studentsTable = document.createElement('table');
+                studentsTable.className = 'students-table';
+                studentsTable.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>שם מלא</th>
+                            <th>דוא"ל</th>
+                            <th>גישה אחרונה</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${students.map(student => `
+                            <tr>
+                                <td>${student.fullname}</td>
+                                <td>${student.email || 'לא מוגדר'}</td>
+                                <td>${student.lastaccess ? new Date(student.lastaccess * 1000).toLocaleDateString('he-IL') : 'מעולם לא'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                `;
+                
+                courseSection.appendChild(studentsTable);
+                container.appendChild(courseSection);
+            });
+        }
+
+        function getFilteredCourses() {
+            let filtered = [...moodleClient.courses];
+            
+            const yearFilter = document.getElementById('yearFilter').value;
+            if (yearFilter) {
+                filtered = filtered.filter(course => {
+                    const courseYear = new Date(course.startdate * 1000).getFullYear();
+                    return courseYear.toString() === yearFilter;
+                });
+            }
+            
+            return filtered;
+        }
+
+        function getFilteredAssignments() {
+            let assignments = [];
+            
+            moodleClient.assignments.forEach(courseData => {
+                if (courseData.assignments) {
+                    courseData.assignments.forEach(assignment => {
+                        assignment.course = courseData.id;
+                        assignments.push(assignment);
+                    });
+                }
+            });
+            
+            const courseFilter = document.getElementById('courseFilter').value;
+            if (courseFilter) {
+                assignments = assignments.filter(assignment => 
+                    assignment.course.toString() === courseFilter
+                );
+            }
+            
+            return assignments;
+        }
+
+        function getAssignmentById(assignmentId) {
+            for (const courseData of moodleClient.assignments) {
+                if (courseData.assignments) {
+                    const assignment = courseData.assignments.find(a => a.id === assignmentId);
+                    if (assignment) {
+                        assignment.course = courseData.id;
+                        return assignment;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function applyFilters() {
+            displayContent();
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.remove('hidden');
+            } else {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            const existingError = document.querySelector('.error-message');
+            if (existingError) {
+                existingError.remove();
+            }
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            document.querySelector('.main-content').insertBefore(errorDiv, document.querySelector('.main-content').firstChild);
+            
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        function showSuccess(message) {
+            const existingSuccess = document.querySelector('.success-message');
+            if (existingSuccess) {
+                existingSuccess.remove();
+            }
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = message;
+            
+            document.querySelector('.main-content').insertBefore(successDiv, document.querySelector('.main-content').firstChild);
+            
+            setTimeout(() => successDiv.remove(), 3000);
+        }
+
+        function logout() {
+            localStorage.removeItem('moodle_token');
+            location.reload();
+        }
+    </script>
+</body>
+</html>
