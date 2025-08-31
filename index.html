@@ -13,7 +13,7 @@
     .pill{border:1px solid #ccc;background:#eef2f7;padding:7px 12px;border-radius:999px;cursor:pointer;margin:3px;font-weight:600}
     .pill.selected{background:#0d63b5;color:#fff}
     table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px}
-    th,td{border:1px solid #ddd;padding:8px;text-align:right}
+    th,td{border:1px solid #ddd;padding:8px;text-align:right;vertical-align:top}
     th{background:#f0f4f8}
     .btn{background:#0d63b5;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer}
     .btn:hover{background:#094b88}
@@ -36,12 +36,20 @@
     </div>
 
     <div id="mainScreen" class="hidden">
-      <div id="courses" class="card">
-        <h2>הקורסים שלי</h2>
+      <div id="years" class="card">
+        <h2>שנות לימוד</h2>
+        <div id="yearsBar"></div>
+      </div>
+      <div id="semesters" class="card hidden">
+        <h2>סמסטרים</h2>
+        <div id="semsBar"></div>
+      </div>
+      <div id="courses" class="card hidden">
+        <h2>קורסים</h2>
         <div id="coursesBar"></div>
       </div>
       <div id="assignments" class="card hidden">
-        <h2>מטלות בקורס</h2>
+        <h2>מטלות</h2>
         <div id="assignList"></div>
       </div>
       <div id="submissions" class="card hidden">
@@ -81,6 +89,61 @@ async function init(){
   document.getElementById("mainScreen").classList.remove("hidden");
   const me=await apiCall("core_webservice_get_site_info");
   const courses=await apiCall("core_enrol_get_users_courses",{userid:me.userid});
+
+  // קיבוץ לפי שנה
+  const groups=new Map();
+  courses.forEach(c=>{
+    const y=detectYearLabel(c.fullname||"");
+    if(!groups.has(y))groups.set(y,[]);
+    groups.get(y).push(c);
+  });
+
+  const bar=document.getElementById("yearsBar");
+  bar.innerHTML="";
+  groups.forEach((arr,year)=>{
+    const b=document.createElement("button");
+    b.className="pill";
+    b.textContent=year;
+    b.onclick=()=>renderSemesters(arr);
+    bar.appendChild(b);
+  });
+}
+
+function detectYearLabel(name){
+  const m=name.match(/תשפ.?/);
+  if(m)return m[0];
+  const g=name.match(/20\d{2}/);
+  return g?g[0]:"לא ידוע";
+}
+function detectSemesterLabel(name){
+  if(/סמסטר.?א/.test(name))return "סמסטר א";
+  if(/סמסטר.?ב/.test(name))return "סמסטר ב";
+  if(/סמסטר.?ק/.test(name)||/קיץ/.test(name))return "סמסטר ק";
+  if(/סמסטר.?ש/.test(name)||/שנתי/.test(name))return "סמסטר ש";
+  return "לא מוגדר";
+}
+
+function renderSemesters(courses){
+  document.getElementById("semesters").classList.remove("hidden");
+  const bar=document.getElementById("semsBar");
+  bar.innerHTML="";
+  const groups=new Map();
+  courses.forEach(c=>{
+    const s=detectSemesterLabel(c.fullname||"");
+    if(!groups.has(s))groups.set(s,[]);
+    groups.get(s).push(c);
+  });
+  groups.forEach((arr,sem)=>{
+    const b=document.createElement("button");
+    b.className="pill";
+    b.textContent=sem;
+    b.onclick=()=>renderCourses(arr);
+    bar.appendChild(b);
+  });
+}
+
+function renderCourses(courses){
+  document.getElementById("courses").classList.remove("hidden");
   const bar=document.getElementById("coursesBar");
   bar.innerHTML="";
   courses.forEach(c=>{
@@ -172,7 +235,7 @@ async function updateGrade(assignId,userId){
     });
     document.getElementById("subsMsg").textContent="עודכן בהצלחה.";
     document.getElementById("subsMsg").classList.remove("hidden");
-    loadSubmissions(assignId,"");
+    loadSubmissions(assignId,document.getElementById("subsTitle").textContent);
   }catch(e){alert("שגיאה בעדכון: "+e.message);}
 }
 </script>
