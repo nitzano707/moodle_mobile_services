@@ -110,7 +110,17 @@ async function apiCall(wsfunction,params={}){
   for(const[k,v]of Object.entries(params))q.append(k,v);
   const res=await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
   const d=await res.json();
-  if(d.exception||d.errorcode)throw new Error(d.message||d.debuginfo||"API Error");
+  
+  // בדיקה יותר חכמה של התגובה
+  if(d && (d.exception||d.errorcode)) {
+    throw new Error(d.message||d.debuginfo||"API Error");
+  }
+  
+  // אם התגובה null או undefined, זה אומר בדרך כלל שהפעולה הצליחה
+  if(d === null || d === undefined) {
+    return {};
+  }
+  
   return d;
 }
 
