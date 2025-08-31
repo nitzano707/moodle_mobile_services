@@ -155,7 +155,7 @@ async function loadSubs(aid,name){
   document.getElementById("subsErr").classList.add("hidden");
   
   try{
-    // קבלת פרטי המטלה כולל הנחיות ומחוון
+    // קבלת פרטי המטלה כולל הנחיות
     const assignmentDetails = await getAssignmentDetails(aid);
     
     const [subs,grades]=await Promise.all([
@@ -169,100 +169,42 @@ async function loadSubs(aid,name){
     // בניית HTML עבור הנחיות המטלה
     let assignmentInfoHtml = "";
     if(assignmentDetails.intro) {
-      assignmentInfoHtml += `<div class="card" style="background:#f8f9ff;border-color:#d4dbe6;">
-        <h4>הנחיות המטלה:</h4>
+      assignmentInfoHtml = `<div class="card" style="background:#f8f9ff;border-color:#d4dbe6;margin-bottom:16px;">
+        <h4 style="margin:0 0 10px 0;">הנחיות המטלה:</h4>
         <div style="border:1px solid #e5e7eb;padding:12px;border-radius:8px;background:white;">
           ${assignmentDetails.intro}
         </div>
       </div>`;
     }
 
-    // בניית HTML עבור מחוון (אם קיים)
-    let rubricHtml = "";
-    let rubricCriteria = [];
-    if(assignmentDetails.rubric && assignmentDetails.rubric.length > 0) {
-      rubricCriteria = assignmentDetails.rubric;
-      rubricHtml = `<div class="card" style="background:#fff8f0;border-color:#e6ddd4;">
-        <h4>מחוון הערכה:</h4>
-        <table style="margin-top:10px;">
-          <thead>
-            <tr>
-              <th>קריטריון</th>
-              <th>תיאור</th>
-              <th>ניקוד מקסימלי</th>
-            </tr>
-          </thead>
-          <tbody>`;
-      
-      assignmentDetails.rubric.forEach(criterion => {
-        const maxScore = Math.max(...(criterion.levels || []).map(l => l.score || 0));
-        rubricHtml += `
-          <tr>
-            <td><strong>${criterion.shortname || criterion.description}</strong></td>
-            <td>${criterion.description || ''}</td>
-            <td>${maxScore}</td>
-          </tr>`;
-      });
-      
-      rubricHtml += `</tbody></table></div>`;
-    }
-
-    // בניית כותרות הטבלה
-    let tableHeaders = "<tr><th>סטודנט</th><th>קבצים</th><th>ציון כללי</th>";
+    // בניית HTML עבור טבלת הגשות (בלי מחוון לעת עתה)
+    let html = assignmentInfoHtml + "<table><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב</th><th>עדכון</th></tr>";
     
-    // הוספת עמודות קריטריונים אם יש מחוון
-    if(rubricCriteria.length > 0) {
-      rubricCriteria.forEach(criterion => {
-        tableHeaders += `<th style="min-width:120px;">${criterion.shortname || 'קריטריון'}<br><small class="muted">(ניקוד + משוב)</small></th>`;
-      });
-    }
-    
-    tableHeaders += "<th>משוב כללי</th><th>עדכון</th></tr>";
-
-    // בניית שורות הטבלה
-    let tableRows = "";
     for(const s of submissions){
       const u=users.find(x=>x.id===s.userid);
       const g=gradesMap.get(s.userid);
       const grade=fmtGrade(g?.grade);
       const fb=await getFeedback(aid,s.userid);
       
-      // קבלת פרטי מחוון עבור הסטודנט
+      // קבלת פרטי מחוון עבור הסטודנט (רק לדיבוג לעת עתה)
       const rubricFeedback = await getRubricFeedback(aid, s.userid);
+      console.log(`Rubric feedback for user ${s.userid}:`, rubricFeedback);
 
       const files=[];s.plugins?.forEach(p=>p.fileareas?.forEach(fa=>fa.files?.forEach(f=>{
         const url=f.fileurl.includes("token=")?f.fileurl:f.fileurl+"?token="+token;
         files.push(`<a href="${url}" target="_blank">${f.filename}</a>`);
       })));
 
-      tableRows += `<tr>
+      html+=`<tr>
         <td><b>${u?.fullname||s.userid}</b><br><span class="muted">${u?.email||""}</span></td>
         <td class="files">${files.join("<br>")||"—"}</td>
-        <td>${grade}</td>`;
-
-      // הוספת עמודות קריטריונים
-      if(rubricCriteria.length > 0) {
-        rubricCriteria.forEach(criterion => {
-          const criterionId = criterion.id || criterion.criterionid;
-          const criterionData = rubricFeedback[criterionId] || {};
-          const score = criterionData.score || '—';
-          const remark = criterionData.remark || '';
-          
-          tableRows += `<td style="font-size:0.9em;">
-            <div><strong>ניקוד: ${score}</strong></div>
-            <div class="muted" style="margin-top:4px;">${remark}</div>
-          </td>`;
-        });
-      }
-
-      tableRows += `
+        <td>${grade}</td>
         <td><textarea id="fb_${s.userid}" class="fb-input" rows="2">${fb}</textarea></td>
         <td><input type="number" id="g_${s.userid}" class="grade-input" placeholder="${grade}" value="${grade !== '–' ? grade : ''}"><button class="btn secondary" onclick="updateGrade(${aid},${s.userid})">שמור</button></td>
       </tr>`;
     }
-
-    const finalHtml = assignmentInfoHtml + rubricHtml + `<table>${tableHeaders}${tableRows}</table>`;
-    document.getElementById("subsArea").innerHTML = finalHtml;
+    html+="</table>";
+    document.getElementById("subsArea").innerHTML=html;
     
   }catch(e){
     console.error("Error loading submissions:", e);
@@ -286,48 +228,15 @@ async function getFeedback(aid,uid){
 
 async function getAssignmentDetails(assignmentId) {
   try {
-    // נסה לקבל פרטי מטלה מתקדמים
-    const assignData = await apiCall("mod_assign_get_assignments", {"assignmentids[0]": assignmentId});
-    const assignment = assignData.assignments?.[0];
+    // נשתמש ב-API שאנחנו כבר יודעים שעובד
+    const assignData = await apiCall("mod_assign_get_assignments", {"courseids[0]": state.selectedCourse.id});
+    const assignment = assignData.courses?.[0]?.assignments?.find(a => a.id == assignmentId);
     
     if (!assignment) return { intro: "", rubric: [] };
 
-    let rubricData = [];
-    
-    // נסה לקבל מידע על מחוון אם קיים
-    try {
-      // API call למחוון - ייתכן שהשם שונה במערכת שלכם
-      const rubricResponse = await apiCall("gradingform_rubric_grader_gradingpanel_fetch", {
-        component: "mod_assign",
-        contextid: assignment.contextid || assignment.cmid,
-        itemname: "submissions",
-        itemid: assignmentId
-      });
-      
-      if (rubricResponse && rubricResponse.criteria) {
-        rubricData = Object.values(rubricResponse.criteria);
-      }
-    } catch (e) {
-      // אם לא הצליח עם rubric, נסה guide
-      try {
-        const guideResponse = await apiCall("gradingform_guide_grader_gradingpanel_fetch", {
-          component: "mod_assign", 
-          contextid: assignment.contextid || assignment.cmid,
-          itemname: "submissions",
-          itemid: assignmentId
-        });
-        
-        if (guideResponse && guideResponse.criteria) {
-          rubricData = Object.values(guideResponse.criteria);
-        }
-      } catch (e2) {
-        console.log("No rubric/guide found for assignment", assignmentId);
-      }
-    }
-
     return {
-      intro: assignment.intro || "",
-      rubric: rubricData
+      intro: assignment.intro || assignment.description || "",
+      rubric: [] // נשאיר ריק לעת עתה עד שנמצא את ה-API הנכון
     };
   } catch (e) {
     console.error("Error getting assignment details:", e);
@@ -338,38 +247,46 @@ async function getAssignmentDetails(assignmentId) {
 async function getRubricFeedback(assignmentId, userId) {
   try {
     const status = await apiCall("mod_assign_get_submission_status", {
-      assignmentid: assignmentId,
+      assignid: assignmentId,
       userid: userId
     });
 
     const rubricData = {};
     const plugins = status?.feedback?.plugins || [];
     
+    // נחפש מידע על מחוון בתוך הפלאגינים הקיימים
     plugins.forEach(plugin => {
-      // חפש plugin של מחוון
-      if (plugin.type && (plugin.type.includes('rubric') || plugin.type.includes('guide'))) {
-        if (plugin.criterias || plugin.criteria) {
-          const criteria = plugin.criterias || plugin.criteria;
-          
-          // אם זה array
-          if (Array.isArray(criteria)) {
-            criteria.forEach(criterion => {
-              rubricData[criterion.id || criterion.criterionid] = {
-                score: criterion.score || criterion.grade || '—',
-                remark: criterion.remark || criterion.comment || ''
-              };
-            });
-          }
-          // אם זה object
-          else if (typeof criteria === 'object') {
-            Object.values(criteria).forEach(criterion => {
-              rubricData[criterion.id || criterion.criterionid] = {
-                score: criterion.score || criterion.grade || '—',
-                remark: criterion.remark || criterion.comment || ''
-              };
-            });
-          }
+      console.log("Plugin found:", plugin.type, plugin); // לדיבוג
+      
+      // אם יש criterias או משהו דומה
+      if (plugin.criterias || plugin.criteria) {
+        const criteria = plugin.criterias || plugin.criteria;
+        
+        if (Array.isArray(criteria)) {
+          criteria.forEach(criterion => {
+            const id = criterion.id || criterion.criterionid || Object.keys(rubricData).length;
+            rubricData[id] = {
+              score: criterion.score || criterion.grade || criterion.points || '—',
+              remark: criterion.remark || criterion.comment || criterion.description || ''
+            };
+          });
+        } else if (typeof criteria === 'object') {
+          Object.entries(criteria).forEach(([key, criterion]) => {
+            rubricData[key] = {
+              score: criterion.score || criterion.grade || criterion.points || '—',
+              remark: criterion.remark || criterion.comment || criterion.description || ''
+            };
+          });
         }
+      }
+      
+      // נחפש גם בשדות אחרים
+      if (plugin.fileareas) {
+        plugin.fileareas.forEach(area => {
+          if (area.area === 'rubric' && area.files) {
+            console.log("Found rubric files:", area.files);
+          }
+        });
       }
     });
 
