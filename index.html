@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --blue:#0b4d88;--accent:#0d63b5;--accent2:#0b58a4;
+      --light:#f5f7fb;--card:#ffffff;--muted:#6b7280;--line:#e5e7eb
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--light);color:#1f2937;font-family:"Segoe UI","Rubik",Tahoma,Arial,sans-serif}
+    header{background:var(--blue);color:#fff;padding:22px 16px}
+    header .wrap{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{margin:0;font-size:clamp(18px,2.6vw,28px)}
+    .top-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{appearance:none;border:1px solid #ccd6e4;background:var(--accent);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
+    .btn:hover{background:var(--accent2)}
+    .btn.secondary{background:#eef3f9;color:#0b2743;border:1px solid #d4dbe6}
+    .btn.danger{background:#ffe8e8;color:#7a0d0d;border-color:#ffd1d1}
+    .container{max-width:1200px;margin:auto;padding:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .section-title{margin:0 0 10px;font-size:19px}
+    .hidden{display:none}
+    .muted{color:var(--muted)}
+    .pillbar{display:flex;flex-wrap:wrap;gap:10px}
+    .pill{border:1px solid #dbe3ed;background:#eef2f7;padding:9px 13px;border-radius:999px;cursor:pointer;font-weight:600}
+    .pill.selected{background:var(--accent);color:#fff;border-color:#0a4c8a}
+    .crumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .crumb{background:#f1f5fb;border:1px solid #dbe3ed;border-radius:999px;padding:6px 10px}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    thead th{background:#f2f5f9;text-align:right;padding:10px;border-bottom:1px solid var(--line);font-weight:800}
+    tbody td{padding:10px;border-top:1px solid var(--line);vertical-align:top}
+    tbody tr:nth-child(even){background:#fcfdff}
+    .nowrap{white-space:nowrap}
+    .files a{display:inline-block;margin:0 0 6px 8px;text-decoration:underline}
+    .ok{padding:10px;background:#e9f9f2;border:1px solid #c7f0df;border-radius:10px;color:#0a7f48}
+    .error{padding:10px;background:#ffecec;border:1px solid #ffc9c9;border-radius:10px;color:#7a0d0d}
+    .grade-input{width:90px;padding:6px;border:1px solid #d9dee6;border-radius:8px}
+    .fb-input{width:100%;min-width:220px;padding:6px;border:1px solid #d9dee6;border-radius:8px;resize:vertical}
+    .rubric{margin-top:8px;background:#f9fbff;border:1px dashed #cfe0ff;border-radius:8px;padding:8px}
+    .rubric h4{margin:0 0 6px;font-size:16px}
+    .rubric table{border:1px solid #dbe3ed;margin-top:6px}
+    footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
+      <div class="top-actions">
+        <button class="btn danger" onclick="deleteToken()">מחק Token 🗑️</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Login -->
+    <div id="loginScreen" class="card">
+      <h2 class="section-title">התחברות עם Token</h2>
+      <p class="muted">ה-Token נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
+      <input type="password" id="tokenInput" placeholder="הדבק כאן את ה-Token" style="width:60%">
+      <div style="margin-top:10px"><button class="btn" onclick="saveToken()">שמור והתחבר</button></div>
+    </div>
+
+    <!-- Main -->
+    <div id="mainScreen" class="hidden">
+
+      <!-- Breadcrumb selections -->
+      <div id="crumbsBox" class="card hidden">
+        <div class="crumbs">
+          <div id="crumbYear" class="crumb hidden"></div>
+          <div id="crumbSem" class="crumb hidden"></div>
+          <div id="crumbCourse" class="crumb hidden"></div>
+          <div id="crumbAssign" class="crumb hidden"></div>
+          <button class="btn secondary" onclick="resetSelections()">נקה בחירות</button>
+        </div>
+      </div>
+
+      <!-- HIERARCHY -->
+      <div id="years" class="card">
+        <h3 class="section-title">שנות לימוד</h3>
+        <div id="yearsBar" class="pillbar"></div>
+        <div id="yearsEmpty" class="muted hidden">לא נמצאו שנים</div>
+      </div>
+
+      <div id="semesters" class="card hidden">
+        <h3 class="section-title">סמסטרים</h3>
+        <div id="semsBar" class="pillbar"></div>
+      </div>
+
+      <div id="courses" class="card hidden">
+        <h3 class="section-title">קורסים</h3>
+        <div id="coursesBar" class="pillbar"></div>
+      </div>
+
+      <div id="assignments" class="card hidden">
+        <h3 class="section-title">מטלות</h3>
+        <div id="assignRubricDef" class="rubric hidden"></div>
+        <div id="assignList"></div>
+      </div>
+
+      <div id="submissions" class="card hidden">
+        <h3 class="section-title" id="subsTitle">הגשות</h3>
+        <div id="subsArea"></div>
+        <div id="subsMsg" class="ok hidden" style="margin-top:10px"></div>
+        <div id="subsErr" class="error hidden" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
+  </div>
+
+<script>
+  // ======= CONFIG & STATE =======
+  const baseUrl = "https://moodle4.talpiot.ac.il";
+  let token = localStorage.getItem("moodleToken") || "";
+
+  const state = {
+    me: null,
+    courses: [],
+    selectedYear: null,
+    selectedSem: null,
+    selectedCourse: null,
+    enrolledByCourse: new Map(), // courseId -> [users]
+    currentAssignId: null,
+    currentAssignName: "",
+    assignMeta: new Map(),       // assignId -> { cmid, name, ... }
+    rubricDef: null              // { method: 'rubric'|'guide', criteria: [...], criteriaMap: Map }
+  };
+
+  // ======= BOOT =======
+  window.addEventListener("load", () => { if (token) init(); });
+
+  function saveToken(){
+    token = document.getElementById("tokenInput").value.trim();
+    if(!token){ alert("נא להזין Token"); return; }
+    localStorage.setItem("moodleToken", token);
+    init();
+  }
+  function deleteToken(){
+    localStorage.removeItem("moodleToken");
+    location.reload();
+  }
+
+  // ======= API & HELPERS =======
+  async function apiCall(wsfunction, params={}){
+    const q = new URLSearchParams({ wstoken: token, wsfunction, moodlewsrestformat: "json" });
+    for (const [k,v] of Object.entries(params)) q.append(k, v);
+    const url = `${baseUrl}/webservice/rest/server.php?${q.toString()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && (data.exception || data.errorcode)) {
+      throw new Error(`${data.errorcode || data.exception}: ${data.message || "API error"}`);
+    }
+    return data;
+  }
+  const fmtDate = (ts) => ts ? new Date(ts*1000).toLocaleString() : "–";
+  const fmtGradeInt = (g) => (g==null || g==="") ? "–" : String(Math.round(+g));
+  function cleanHtml(html){
+    if(!html) return "";
+    return String(html)
+      .replace(/<\/(p|div)>/gi, "\n")
+      .replace(/<br\s*\/?>(\s*)/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\n{3,}/g,"\n\n")
+      .trim();
+  }
+  function fileUrlWithToken(url){
+    if(!url) return "#";
+    let u = url;
+    // Normalize to webservice/pluginfile.php
+    u = u.replace("/pluginfile.php/", "/webservice/pluginfile.php/");
+    // Preserve query and add token if missing
+    if(!/(\?|&)token=/.test(u)){
+      u += (u.includes("?")?"&":"?") + "token=" + encodeURIComponent(token);
+    }
+    return u;
+  }
+  function markSelected(container, btn){
+    [...container.querySelectorAll(".pill")].forEach(b=>b.classList.remove("selected"));
+    btn.classList.add("selected");
+  }
+  function escapeHtml(s){return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"','&quot;');}
+
+  // ======= YEAR / SEM DETECTION =======
+  function detectYearLabel(name){
+    if (!name) return "לא ידוע";
+    const heb = name.match(/תשפ.?[\"״׳']?[אבגדהוזחטיכלמנסעפצקרשת]?/);
+    if (heb) return heb[0].replace(/[\""״׳']/g,"");
+    const g = name.match(/20\d{2}/);
+    return g ? g[0] : "לא ידוע";
+  }
+  function detectSemesterLabel(name){
+    if(!name) return "לא מוגדר";
+    if (/סמסטר.?א/.test(name)) return "סמסטר א";
+    if (/סמסטר.?ב/.test(name)) return "סמסטר ב";
+    if (/סמסטר.?ק/.test(name) || /קיץ/.test(name)) return "סמסטר ק";
+    if (/סמסטר.?ש/.test(name) || /שנתי/.test(name)) return "סמסטר ש";
+    return "לא מוגדר";
+  }
+
+  // ======= INIT =======
+  async function init(){
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("mainScreen").classList.remove("hidden");
+    resetSelections(true);
+
+    try{
+      state.me = await apiCall("core_webservice_get_site_info");
+      state.courses = await apiCall("core_enrol_get_users_courses", { userid: state.me.userid });
+      renderYears();
+    }catch(e){
+      alert("שגיאת התחברות: " + e.message);
+      deleteToken();
+    }
+  }
+
+  // ======= HIERARCHY FLOW =======
+  function resetSelections(skipCrumbs=false){
+    state.selectedYear = null;
+    state.selectedSem = null;
+    state.selectedCourse = null;
+    state.currentAssignId = null;
+    state.currentAssignName = "";
+    state.assignMeta.clear();
+    state.rubricDef = null;
+    if (!skipCrumbs) renderCrumbs();
+
+    document.getElementById("semesters").classList.add("hidden");
+    document.getElementById("courses").classList.add("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+  }
+  function renderCrumbs(){
+    const box = document.getElementById("crumbsBox");
+    const year = document.getElementById("crumbYear");
+    const sem = document.getElementById("crumbSem");
+    const course = document.getElementById("crumbCourse");
+    const assign = document.getElementById("crumbAssign");
+    let any = false;
+
+    if (state.selectedYear){ year.textContent = "שנה: " + state.selectedYear; year.classList.remove("hidden"); any = true; } else year.classList.add("hidden");
+    if (state.selectedSem){ sem.textContent = "סמסטר: " + state.selectedSem; sem.classList.remove("hidden"); any = true; } else sem.classList.add("hidden");
+    if (state.selectedCourse){ course.textContent = "קורס: " + (state.selectedCourse.fullname || state.selectedCourse.shortname); course.classList.remove("hidden"); any = true; } else course.classList.add("hidden");
+    if (state.currentAssignId){ assign.textContent = "מטלה: " + state.currentAssignName; assign.classList.remove("hidden"); any = true; } else assign.classList.add("hidden");
+
+    box.classList.toggle("hidden", !any);
+  }
+
+  function renderYears(){
+    const yearsBar = document.getElementById("yearsBar");
+    const yearsEmpty = document.getElementById("yearsEmpty");
+    yearsBar.innerHTML = "";
+    const groups = new Map();
+    state.courses.forEach(c=>{
+      const y = detectYearLabel(c.fullname || c.shortname || "");
+      if(!groups.has(y)) groups.set(y,[]);
+      groups.get(y).push(c);
+    });
+    const years = Array.from(groups.keys()).sort((a,b)=> String(b).localeCompare(String(a), 'he'));
+    if (years.length===0){ yearsEmpty.classList.remove("hidden"); return; }
+    yearsEmpty.classList.add("hidden");
+
+    years.forEach(y=>{
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = y;
+      btn.onclick = ()=> {
+        markSelected(yearsBar, btn);
+        state.selectedYear = y; renderCrumbs();
+        renderSemesters(groups.get(y));
+      };
+      yearsBar.appendChild(btn);
+    });
+  }
+
+  function renderSemesters(courses){
+    document.getElementById("semesters").classList.remove("hidden");
+    document.getElementById("courses").classList.add("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+    const semBar = document.getElementById("semsBar");
+    semBar.innerHTML = "";
+
+    const order = ["סמסטר א","סמסטר ב","סמסטר ק","סמסטר ש","לא מוגדר"];
+    const semGroups = new Map(order.map(s=>[s, []]));
+    courses.forEach(c=>{
+      const s = detectSemesterLabel(c.fullname || c.shortname || "");
+      semGroups.get(s ?? "לא מוגדר").push(c);
+    });
+
+    order.forEach(s=>{
+      if (!semGroups.get(s) || semGroups.get(s).length===0) return;
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = s;
+      btn.onclick = ()=> {
+        markSelected(semBar, btn);
+        state.selectedSem = s; renderCrumbs();
+        renderCourses(semGroups.get(s));
+      };
+      semBar.appendChild(btn);
+    });
+  }
+
+  function renderCourses(courses){
+    const bar = document.getElementById("coursesBar");
+    bar.innerHTML = "";
+    document.getElementById("courses").classList.remove("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+
+    courses.forEach(c=>{
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = c.fullname || c.shortname || ("קורס " + c.id);
+      btn.onclick = ()=> openCourse(c, btn);
+      bar.appendChild(btn);
+    });
+  }
+
+  async function openCourse(course, btnEl){
+    state.selectedCourse = course; renderCrumbs();
+    if (btnEl) markSelected(document.getElementById("coursesBar"), btnEl);
+
+    document.getElementById("assignList").innerHTML = "<div class='muted'>טוען מטלות…</div>";
+    document.getElementById("assignRubricDef").classList.add("hidden");
+    document.getElementById("assignments").classList.remove("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+
+    // cache enrolled users
+    if (!state.enrolledByCourse.has(course.id)){
+      try{
+        const users = await apiCall("core_enrol_get_enrolled_users", { courseid: course.id });
+        state.enrolledByCourse.set(course.id, users || []);
+      }catch(e){ state.enrolledByCourse.set(course.id, []); }
+    }
+
+    try{
+      const data = await apiCall("mod_assign_get_assignments", {"courseids[0]": course.id});
+      const assigns = (data.courses && data.courses[0]) ? data.courses[0].assignments : [];
+      state.assignMeta.clear();
+      if(assigns.length===0){
+        document.getElementById("assignList").innerHTML = "<div class='muted'>אין מטלות בקורס זה</div>";
+        return;
+      }
+      let html = "<table><thead><tr><th>שם מטלה</th><th class='nowrap'>פתיחה</th><th class='nowrap'>דדליין</th></tr></thead><tbody>";
+      assigns.forEach(a=>{
+        state.assignMeta.set(a.id, { cmid: a.cmid, name: a.name });
+        html += `<tr>
+          <td><button class="btn secondary assignBtn" data-assign-id="${a.id}" onclick="loadSubmissions(${a.id}, '${escapeHtml(a.name)}')">${escapeHtml(a.name)}</button></td>
+          <td class="nowrap">${fmtDate(a.allowsubmissionsfromdate)}</td>
+          <td class="nowrap">${fmtDate(a.duedate)}</td>
+        </tr>`;
+      });
+      html += "</tbody></table>";
+      document.getElementById("assignList").innerHTML = html;
+    }catch(e){
+      document.getElementById("assignList").innerHTML = `<div class="error">שגיאה בטעינת מטלות: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  function markSelectedAssignment(assignId){
+    document.querySelectorAll(".assignBtn").forEach(b=>b.classList.remove("selected"));
+    const el = document.querySelector(`.assignBtn[data-assign-id='${assignId}']`);
+    if (el) el.classList.add("selected");
+  }
+
+  // ======= RUBRIC / GUIDE DEFINITION (assignment-level) =======
+  async function loadRubricDefinition(assignId){
+    state.rubricDef = null;
+    const meta = state.assignMeta.get(assignId);
+    if(!meta?.cmid) return null;
+    try{
+      // 1) get contextid for cmid
+      const cm = await apiCall("core_course_get_course_module", { cmid: meta.cmid });
+      const contextid = cm?.cm?.contextid || cm?.contextid || cm?.coursemodule?.contextid;
+      if(!contextid) return null;
+      // 2) try get definitions (prefer 'submissions', fallback to 'submission')
+      let defs = await apiCall("core_grading_get_definitions", { component: "mod_assign", area: "submissions", contextid });
+      if(!defs?.definitions?.length){
+        defs = await apiCall("core_grading_get_definitions", { component: "mod_assign", area: "submission", contextid });
+      }
+      const def = (defs?.definitions||[]).find(d=>/rubric|guide/i.test(d?.method||"")) || defs?.definitions?.[0];
+      if(!def) return null;
+
+      // Normalize structure
+      const method = def.method; // 'rubric' or 'guide'
+      const criteria = [];
+      const criteriaMap = new Map();
+      if(method === 'rubric' && def?.rubric?.criteria){
+        (def.rubric.criteria||[]).forEach(c=>{
+          const levels = (c.levels||[]).map(l=>({id:l.id, score: +l.score, definition: l.definition}));
+          const max = Math.max(...levels.map(l=>l.score), 0);
+          const item = { id:c.id, description: c.description || c.shortname || '', levels, maxscore: max };
+          criteria.push(item); criteriaMap.set(c.id, item);
+        });
+      } else if (method === 'guide' && def?.guide?.criteria){
+        (def.guide.criteria||[]).forEach(c=>{
+          const item = { id:c.id, description: c.description || c.shortname || '', maxscore: +c.maxscore || 0 };
+          criteria.push(item); criteriaMap.set(c.id, item);
+        });
+      }
+      state.rubricDef = { method, criteria, criteriaMap };
+      renderRubricHeader();
+      return state.rubricDef;
+    }catch(e){
+      // silent: not all servers expose this WS
+      return null;
+    }
+  }
+
+  function renderRubricHeader(){
+    const box = document.getElementById('assignRubricDef');
+    const def = state.rubricDef;
+    if(!def || !def.criteria?.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+    let html = `<h4>מחוון למטלה (שיטה: ${def.method==='rubric'?'Rubric':'Guide'})</h4>`;
+    html += '<table><thead><tr><th>קריטריון</th><th class="nowrap">ניקוד מקסימלי</th></tr></thead><tbody>';
+    def.criteria.forEach(c=>{
+      html += `<tr><td>${escapeHtml(c.description||'קריטריון')}</td><td class="nowrap">${c.maxscore ?? ''}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    box.innerHTML = html; box.classList.remove('hidden');
+  }
+
+  // ======= SUBMISSIONS =======
+  async function loadSubmissions(assignId, assignName){
+    state.currentAssignId = assignId;
+    state.currentAssignName = assignName || "";
+    renderCrumbs();
+    markSelectedAssignment(assignId);
+
+    document.getElementById("subsTitle").textContent = "הגשות במטלה: " + (assignName || "");
+    document.getElementById("subsArea").innerHTML = "<div class='muted'>טוען הגשות וציונים…</div>";
+    document.getElementById("submissions").classList.remove("hidden");
+    document.getElementById("subsMsg").classList.add("hidden");
+    document.getElementById("subsErr").classList.add("hidden");
+
+    // Try load rubric definition (for the assignment)
+    await loadRubricDefinition(assignId);
+
+    try{
+      const [subsData, gradesData] = await Promise.all([
+        apiCall("mod_assign_get_submissions", {"assignmentids[0]": assignId}),
+        apiCall("mod_assign_get_grades", {"assignmentids[0]": assignId})
+      ]);
+      const submissions = (subsData.assignments && subsData.assignments[0]) ? subsData.assignments[0].submissions : [];
+      const grades = (gradesData.assignments && gradesData.assignments[0]) ? gradesData.assignments[0].grades : [];
+      const gradeMap = new Map(grades.map(g=>[g.userid,g]));
+
+      const users = state.enrolledByCourse.get(state.selectedCourse.id) || [];
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      // משובים + בחירות מחוון לכל המשתמשים (assignid!)
+      const userIds = submissions.map(s=>s.userid);
+      const feedbackMap = await fetchFeedbackBatch(assignId, userIds);
+
+      // build table
+      let html = "<table><thead><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב מילולי</th><th>עדכון</th></tr></thead><tbody>";
+      for (const s of submissions){
+        const g = gradeMap.get(s.userid);
+        const gradeText = fmtGradeInt(g?.grade);
+        const fbObj = feedbackMap.get(s.userid) || { text: "", rubricSel: {} };
+        const fbText = cleanHtml(fbObj.text);
+
+        const u = userMap.get(s.userid);
+        const name = u?.fullname || `${s.userid}`;
+
+        // files
+        const files = [];
+        (s.plugins||[]).forEach(p=>{
+          (p.fileareas||[]).forEach(fa=>{
+            (fa.files||[]).forEach(file=>{
+              const href = fileUrlWithToken(file.fileurl || "");
+              files.push(`<a href="${href}" target="_blank" rel="noreferrer">${escapeHtml(file.filename || "קובץ")}</a>`);
+            });
+          });
+        });
+
+        // rubric editor (per user) if definition exists
+        let rubricUI = '';
+        if(state.rubricDef && state.rubricDef.criteria?.length){
+          const m = state.rubricDef.method;
+          rubricUI += `<div class="rubric"><button class="btn secondary" onclick="toggleRubric('rb_${s.userid}')">עריכת מחוון</button>`;
+          rubricUI += `<div id="rb_${s.userid}" class="hidden" style="margin-top:8px">`;
+          rubricUI += '<table><thead><tr><th>קריטריון</th>' + (m==='rubric'?'<th>רמה</th>':'<th>ציון</th>') + '<th>הערה</th></tr></thead><tbody>';
+          state.rubricDef.criteria.forEach(c=>{
+            const sel = fbObj.rubricSel?.[c.id] || {};
+            if(m==='rubric'){
+              const opts = (c.levels||[]).map(l=>`<option value="${l.id}" ${sel.levelid==l.id?'selected':''}>${escapeHtml(l.definition||'רמה')} — ${l.score}</option>`).join('');
+              rubricUI += `<tr><td>${escapeHtml(c.description||'')}</td><td><select id="rb_lvl_${s.userid}_${c.id}"><option value="">—</option>${opts}</select></td><td><input id="rb_rmk_${s.userid}_${c.id}" type="text" placeholder="הערה" value="${escapeHtml(sel.remark||'')}"></td></tr>`;
+            }else{ // guide
+              rubricUI += `<tr><td>${escapeHtml(c.description||'')}</td><td><input id="gd_score_${s.userid}_${c.id}" type="number" step="0.01" min="0" max="${c.maxscore}" value="${sel.score??''}" placeholder="0-${c.maxscore}"></td><td><input id="gd_rmk_${s.userid}_${c.id}" type="text" placeholder="הערה" value="${escapeHtml(sel.remark||'')}"></td></tr>`;
+            }
+          });
+          rubricUI += '</tbody></table></div></div>';
+        }
+
+        html += `
+          <tr>
+            <td>
+              <div><strong>${escapeHtml(name)}</strong></div>
+              <div class="muted">ID: ${s.userid}${u?.email ? " · " + escapeHtml(u.email) : ""}</div>
+              ${rubricUI}
+            </td>
+            <td class="files">${files.join("<br/>") || "<span class='muted'>אין קבצים</span>"}</td>
+            <td class="nowrap">${gradeText}</td>
+            <td>
+              <textarea id="fb_${s.userid}" class="fb-input" rows="3" placeholder="משוב">${escapeHtml(fbText)}</textarea>
+            </td>
+            <td class="nowrap">
+              <input type="number" step="0.01" id="g_${s.userid}" class="grade-input" placeholder="${gradeText==='–'?'ציון':''}">
+              <button class="btn secondary" onclick="updateGrade(${assignId}, ${s.userid})">שמור</button>
+            </td>
+          </tr>`;
+      }
+      html += "</tbody></table>";
+      document.getElementById("subsArea").innerHTML = html;
+
+    }catch(e){
+      const err = document.getElementById("subsErr");
+      err.textContent = "שגיאה בטעינת הגשות/ציונים: " + e.message;
+      err.classList.remove("hidden");
+      document.getElementById("subsArea").innerHTML = "";
+    }
+  }
+
+  function toggleRubric(id){
+    const el = document.getElementById(id);
+    if(!el) return; el.classList.toggle("hidden");
+  }
+
+  // === Feedback batch + current rubric selections (best-effort) ===
+  async function fetchFeedbackBatch(assignId, userIds){
+    const map = new Map();
+    const limit = 8; // מקביליות מתונה
+    for(let i=0;i<userIds.length;i+=limit){
+      const slice = userIds.slice(i,i+limit);
+      await Promise.all(slice.map(async uid=>{
+        try{
+          const st = await apiCall("mod_assign_get_submission_status", { assignid: assignId, userid: uid });
+          const fb = st?.feedback || {};
+          let text = "";
+          const plugins = fb.plugins || [];
+
+          // textual comment
+          const pComments = plugins.find(p => p.type === "comments" || /comments/i.test(p?.name||""));
+          if (pComments?.editorfields){
+            const ef = pComments.editorfields.find(e => Object.prototype.hasOwnProperty.call(e,"text"));
+            if (ef?.text != null) text = ef.text;
+          }
+
+          // try extract current rubric/guide selections if present in plugin payload
+          const rubricSel = {};
+          const pRubric = plugins.find(p => /rubric|guide/i.test(p?.type||"") || /rubric|guide/i.test(p?.name||""));
+          if (pRubric){
+            // Common shapes seen: pRubric.criteria / pRubric.criterion
+            const crits = pRubric.criteria || pRubric.criterion || [];
+            (Array.isArray(crits)?crits:Object.values(crits)).forEach(c=>{
+              const cid = c.id != null ? c.id : c.criterionid;
+              if(cid==null) return;
+              if(state.rubricDef?.method==='rubric'){
+                rubricSel[cid] = { levelid: c.levelid ?? c.chosen ?? c.selected, remark: c.remark || c.comment || "" };
+              }else if(state.rubricDef?.method==='guide'){
+                rubricSel[cid] = { score: c.score ?? c.value ?? null, remark: c.remark || c.comment || "" };
+              }
+            });
+          }
+
+          map.set(uid, { text, rubricSel });
+        }catch(e){
+          map.set(uid, { text: "" });
+        }
+      }));
+    }
+    return map;
+  }
+
+  // ======= UPDATE (grade + feedback + rubric/guide) =======
+  async function updateGrade(assignId, userId){
+    const inp = document.getElementById(`g_${userId}`);
+    const fb = document.getElementById(`fb_${userId}`);
+    const gradeVal = (inp?.value || "").trim();   // יכול להיות ריק (עדכון משוב בלבד)
+    const fbText  = (fb?.value  || "").trim();
+
+    try{
+      const params = {
+        assignmentid: assignId,
+        userid: userId,
+        attemptnumber: -1,
+        workflowstate: "graded",
+        addattempt: 0,
+        applytoall: 0,
+        "plugindata[assignfeedbackcomments_editor][text]": fbText,
+        "plugindata[assignfeedbackcomments_editor][format]": 1,
+        "plugindata[assignfeedbackcomments_editor][itemid]": 0
+      };
+
+      // Advanced grading: send rubric/guide criteria when definition is present
+      if (state.rubricDef && state.rubricDef.criteria?.length){
+        const method = state.rubricDef.method; // 'rubric' | 'guide'
+        params[`advancedgradingdata[method]`] = method;
+        if(method === 'rubric'){
+          state.rubricDef.criteria.forEach(c=>{
+            const lvl = (document.getElementById(`rb_lvl_${userId}_${c.id}`) || {}).value;
+            const rmk = (document.getElementById(`rb_rmk_${userId}_${c.id}`) || {}).value || '';
+            if(lvl){ params[`advancedgradingdata[rubric][criteria][${c.id}][levelid]`] = lvl; }
+            if(rmk){ params[`advancedgradingdata[rubric][criteria][${c.id}][remark]`] = rmk; }
+          });
+        } else if (method === 'guide'){
+          state.rubricDef.criteria.forEach(c=>{
+            const sc = (document.getElementById(`gd_score_${userId}_${c.id}`) || {}).value;
+            const rmk = (document.getElementById(`gd_rmk_${userId}_${c.id}`) || {}).value || '';
+            if(sc!=='' && sc!=null){ params[`advancedgradingdata[guide][criteria][${c.id}][score]`] = sc; }
+            if(rmk){ params[`advancedgradingdata[guide][criteria][${c.id}][remark]`] = rmk; }
+          });
+        }
+        // כשמחוון פעיל – Moodle מחשב ציון מסך הקריטריונים, לכן לא נשלח grade כדי להימנע מ-invalidparameter
+      } else {
+        if (gradeVal !== "") params.grade = gradeVal; // אין מחוון: אפשר לעדכן ציון ישיר
+      }
+
+      await apiCall("mod_assign_save_grade", params);
+
+      document.getElementById("subsMsg").textContent = "הציון/משוב עודכנו בהצלחה.";
+      document.getElementById("subsMsg").classList.remove("hidden");
+      // רענון הנתונים לשיקוף מיידי
+      loadSubmissions(assignId, state.currentAssignName);
+    }catch(e){
+      alert("עדכון נכשל: " + e.message + "\n(ודא שלטוקן יש הרשאות עדכון ציונים/מחוון/משוב)");
+    }
+  }
+</script>
+</body>
+</html>
