@@ -2,100 +2,179 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>Moodle API Explorer</title>
+  <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; background:#f8f9fa; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; direction: rtl; }
     h1 { margin-bottom: 20px; }
     .hidden { display: none; }
-    button { margin: 5px; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
-    #result { white-space: pre-wrap; background: #fff; padding: 10px; border: 1px solid #ccc; margin-top: 10px; max-height: 400px; overflow-y: auto; }
-    #functions button { display:block; margin:5px 0; width:100%; text-align:right; }
+    button { margin: 5px; padding: 8px 12px; border-radius: 6px; cursor: pointer; background:#fff; border:1px solid #ccc; }
+    button:hover { background:#eef; }
+    #result { white-space: pre-wrap; background: #fff; padding: 10px; border: 1px solid #ccc; margin-top: 10px; max-height:400px; overflow-y:auto; }
+    .tabs { margin-bottom:20px; }
+    .tabs button { margin-left:10px; }
+    .section { background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:15px; }
   </style>
 </head>
 <body>
-  <h1>📌 Moodle API Explorer</h1>
+  <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
 
   <!-- מסך כניסה -->
   <div id="loginScreen">
-    <label>כתובת Moodle:</label><br>
-    <input type="text" id="urlInput" size="60" placeholder="https://moodle4.talpiot.ac.il"><br><br>
-
     <label>Token:</label><br>
     <input type="text" id="tokenInput" size="60"><br><br>
-
     <button onclick="saveToken()">שמור והתחבר</button>
   </div>
 
   <!-- מסך ראשי -->
   <div id="mainScreen" class="hidden">
-    <h2>בחר פונקציה:</h2>
-    <div id="functions"></div>
-    <div id="result"></div>
-    <br>
-    <button onclick="goHome()">🏠 חזרה</button>
-    <button onclick="deleteToken()">🗑️ מחק Token</button>
+    <div class="tabs">
+      <button onclick="showTab('hierarchy')">📚 ממשק היררכי</button>
+      <button onclick="showTab('functions')">⚙️ כל הפונקציות הזמינות לי</button>
+      <button onclick="deleteToken()">🗑️ מחק Token</button>
+    </div>
+
+    <div id="hierarchyTab" class="tab">
+      <div id="years"></div>
+      <div id="semesters"></div>
+      <div id="courses"></div>
+      <div id="assignments"></div>
+      <div id="submissions"></div>
+    </div>
+
+    <div id="functionsTab" class="tab hidden">
+      <h3>רשימת פונקציות מה־token שלך</h3>
+      <div id="functions"></div>
+      <div id="result"></div>
+    </div>
   </div>
 
   <script>
-    const functionsList = [
-      {name: "מידע על המשתמש והאתר", func: "core_webservice_get_site_info"},
-      {name: "הקורסים שלי", func: "core_enrol_get_users_courses"},
-      {name: "מטלות בקורסים שלי", func: "mod_assign_get_assignments"},
-      {name: "תכני קורס (id=2)", func: "core_course_get_contents&courseid=2"},
-      {name: "סטודנטים בקורס (id=2)", func: "core_enrol_get_enrolled_users&courseid=2"}
-    ];
+    const baseUrl = "https://moodle4.talpiot.ac.il";
+    let token = localStorage.getItem("moodleToken") || "";
 
     const loginScreen = document.getElementById("loginScreen");
     const mainScreen = document.getElementById("mainScreen");
-    const functionsDiv = document.getElementById("functions");
-    const resultDiv = document.getElementById("result");
 
-    window.onload = () => {
-      if (localStorage.getItem("moodleToken") && localStorage.getItem("moodleUrl")) {
-        showMain();
-      }
-    };
+    window.onload = () => { if (token) init(); };
 
     function saveToken() {
-      const token = document.getElementById("tokenInput").value.trim();
-      const url = document.getElementById("urlInput").value.trim();
-      if (!token || !url) { alert("נא להזין כתובת וטוקן"); return; }
+      token = document.getElementById("tokenInput").value.trim();
+      if (!token) { alert("נא להזין טוקן"); return; }
       localStorage.setItem("moodleToken", token);
-      localStorage.setItem("moodleUrl", url);
-      showMain();
+      init();
     }
 
-    function showMain() {
+    function deleteToken() {
+      localStorage.removeItem("moodleToken");
+      location.reload();
+    }
+
+    function showTab(tab) {
+      document.getElementById("hierarchyTab").classList.add("hidden");
+      document.getElementById("functionsTab").classList.add("hidden");
+      if (tab === "hierarchy") document.getElementById("hierarchyTab").classList.remove("hidden");
+      if (tab === "functions") document.getElementById("functionsTab").classList.remove("hidden");
+    }
+
+    async function init() {
       loginScreen.classList.add("hidden");
       mainScreen.classList.remove("hidden");
-      functionsDiv.innerHTML = "";
-      functionsList.forEach(item => {
+      await loadFunctions();
+      await loadCourses();
+    }
+
+    // ---- פונקציות כלליות ----
+    async function apiCall(func, params={}) {
+      const q = new URLSearchParams({ wstoken: token, wsfunction: func, moodlewsrestformat:"json" });
+      for (const [k,v] of Object.entries(params)) q.append(k,v);
+      const res = await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
+      return await res.json();
+    }
+
+    // ---- פונקציות זמינות ----
+    async function loadFunctions() {
+      const info = await apiCall("core_webservice_get_site_info");
+      const funcs = info.functions || [];
+      const div = document.getElementById("functions");
+      div.innerHTML = "";
+      funcs.forEach(f => {
         const btn = document.createElement("button");
-        btn.textContent = item.name;
-        btn.onclick = () => callFunction(item.func);
-        functionsDiv.appendChild(btn);
+        btn.textContent = f.name;
+        btn.onclick = async () => {
+          const data = await apiCall(f.name);
+          document.getElementById("result").textContent = JSON.stringify(data,null,2);
+        };
+        div.appendChild(btn);
       });
     }
 
-    async function callFunction(func) {
-      const token = localStorage.getItem("moodleToken");
-      const url = localStorage.getItem("moodleUrl");
-      resultDiv.textContent = "⏳ טוען...";
-      try {
-        const res = await fetch(`${url}/webservice/rest/server.php?wstoken=${token}&wsfunction=${func}&moodlewsrestformat=json`);
-        const data = await res.json();
-        resultDiv.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        resultDiv.textContent = "❌ שגיאה: " + err;
-      }
+    // ---- ממשק היררכי ----
+    async function loadCourses() {
+      const info = await apiCall("core_webservice_get_site_info");
+      const courses = await apiCall("core_enrol_get_users_courses", { userid: info.userid });
+      // חלוקה לפי שנה
+      const yearsDiv = document.getElementById("years");
+      yearsDiv.innerHTML = "<h3>שנות לימוד</h3>";
+      const years = {};
+      courses.forEach(c => {
+        const year = (c.fullname.match(/20\\d{2}/)||["אחר"])[0];
+        if (!years[year]) years[year]=[];
+        years[year].push(c);
+      });
+      Object.keys(years).forEach(y=>{
+        const btn=document.createElement("button");
+        btn.textContent=y;
+        btn.onclick=()=>showSemesters(years[y]);
+        yearsDiv.appendChild(btn);
+      });
     }
 
-    function goHome() { resultDiv.textContent = ""; window.scrollTo(0,0); }
-    function deleteToken() {
-      localStorage.removeItem("moodleToken");
-      localStorage.removeItem("moodleUrl");
-      mainScreen.classList.add("hidden");
-      loginScreen.classList.remove("hidden");
+    function showSemesters(courses) {
+      document.getElementById("semesters").innerHTML="<h3>סמסטרים</h3>";
+      document.getElementById("courses").innerHTML="";
+      const sems={};
+      courses.forEach(c=>{
+        const sem=(c.fullname.match(/סמסטר.?[אב]/)||["לא מוגדר"])[0];
+        if(!sems[sem]) sems[sem]=[];
+        sems[sem].push(c);
+      });
+      Object.keys(sems).forEach(s=>{
+        const btn=document.createElement("button");
+        btn.textContent=s;
+        btn.onclick=()=>showCourses(sems[s]);
+        document.getElementById("semesters").appendChild(btn);
+      });
+    }
+
+    function showCourses(courses) {
+      const div=document.getElementById("courses");
+      div.innerHTML="<h3>קורסים</h3>";
+      courses.forEach(c=>{
+        const btn=document.createElement("button");
+        btn.textContent=c.fullname;
+        btn.onclick=()=>loadAssignments(c.id);
+        div.appendChild(btn);
+      });
+    }
+
+    async function loadAssignments(courseid) {
+      const data=await apiCall("mod_assign_get_assignments", {"courseids[0]":courseid});
+      const assigns=(data.courses && data.courses[0])?data.courses[0].assignments:[];
+      const div=document.getElementById("assignments");
+      div.innerHTML="<h3>מטלות</h3>";
+      assigns.forEach(a=>{
+        const btn=document.createElement("button");
+        btn.textContent=a.name;
+        btn.onclick=()=>loadSubmissions(a.id);
+        div.appendChild(btn);
+      });
+    }
+
+    async function loadSubmissions(assignid) {
+      const data=await apiCall("mod_assign_get_submissions", {"assignmentids[0]":assignid});
+      const subs=(data.assignments && data.assignments[0])?data.assignments[0].submissions:[];
+      const div=document.getElementById("submissions");
+      div.innerHTML="<h3>הגשות</h3><pre>"+JSON.stringify(subs,null,2)+"</pre>";
     }
   </script>
 </body>
