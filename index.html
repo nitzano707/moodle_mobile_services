@@ -208,27 +208,30 @@ async function updateGrade(aid, uid) {
   try {
     console.log(`Updating grade for user ${uid}, grade: ${grade}`);
     
-    // ננסה גישה פשוטה יותר עם פרמטרים בסיסיים בלבד
+    // משתמש בפרמטרים הנכונים כמו בקוד העובד
     const params = {
       assignmentid: aid,
       userid: uid,
-      grade: grade || "0",
-      attemptnumber: -1  // -1 אומר "הניסיון האחרון"
+      attemptnumber: -1,
+      addattempt: 0,
+      workflowstate: "graded",
+      applytoall: 0,
+      "plugindata[assignfeedbackcomments_editor][text]": fb || "",
+      "plugindata[assignfeedbackcomments_editor][format]": 1
     };
     
-    // רק אם יש משוב, נוסיף אותו
-    if (fb && fb.trim()) {
-      params["plugindata[assignfeedbackcomments_editor][text]"] = fb;
-      params["plugindata[assignfeedbackcomments_editor][format]"] = 1;
+    // הוסף ציון אם קיים
+    if (grade !== "") {
+      params.grade = grade;
     }
     
     console.log("API params:", params);
     
-    // שמור את הציון
+    // שמור את הציון והמשוב
     const result = await apiCall("mod_assign_save_grade", params);
     console.log("Save grade result:", result);
     
-    document.getElementById("subsMsg").textContent = "עודכן בהצלחה!";
+    document.getElementById("subsMsg").textContent = "הציון/משוב עודכנו בהצלחה!";
     document.getElementById("subsMsg").classList.remove("hidden");
     
     // מרענן את הטבלה אחרי 1 שנייה
@@ -238,31 +241,8 @@ async function updateGrade(aid, uid) {
     
   } catch (e) {
     console.error("Error updating grade:", e);
-    
-    // ננסה שיטה חלופית - רק עדכון ציון בלי משוב
-    try {
-      console.log("Trying alternative method - grade only");
-      const simpleParams = {
-        assignmentid: aid,
-        userid: uid,
-        grade: grade || "0"
-      };
-      
-      const result2 = await apiCall("mod_assign_save_grade", simpleParams);
-      console.log("Alternative save result:", result2);
-      
-      document.getElementById("subsMsg").textContent = "ציון עודכן בהצלחה (ללא משוב)";
-      document.getElementById("subsMsg").classList.remove("hidden");
-      
-      setTimeout(() => {
-        loadSubs(aid, state.assignName);
-      }, 1000);
-      
-    } catch (e2) {
-      console.error("Alternative method also failed:", e2);
-      document.getElementById("subsErr").textContent = "שגיאה בעדכון: " + e.message + " (גם השיטה החלופית נכשלה)";
-      document.getElementById("subsErr").classList.remove("hidden");
-    }
+    document.getElementById("subsErr").textContent = "עדכון נכשל: " + e.message + "\n(ייתכן שהטוקן חסר הרשאות או שהשרת דורש פרמטרים נוספים)";
+    document.getElementById("subsErr").classList.remove("hidden");
   }
 }
 
