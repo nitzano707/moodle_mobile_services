@@ -4,178 +4,259 @@
   <meta charset="UTF-8">
   <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; direction: rtl; }
-    h1 { margin-bottom: 20px; }
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      margin: 0; padding: 0;
+      background: #f4f6f9; color: #222;
+      direction: rtl;
+    }
+    header {
+      background: #004080; color: #fff;
+      padding: 20px; text-align: center;
+    }
+    header h1 { margin: 0; font-size: 1.8em; }
+    .container { max-width: 1100px; margin: auto; padding: 20px; }
+    .tabs { margin-bottom: 20px; text-align: center; }
+    .tabs button {
+      margin: 0 5px; padding: 10px 20px;
+      border: none; border-radius: 20px;
+      background: #eee; cursor: pointer;
+      font-weight: bold;
+    }
+    .tabs button.active { background: #004080; color: #fff; }
+    button {
+      cursor: pointer; border: none; border-radius: 6px;
+      background: #0066cc; color: #fff;
+      padding: 6px 12px; margin: 4px;
+      font-size: 0.9em;
+    }
+    button:hover { background: #004d99; }
+    table {
+      border-collapse: collapse; width: 100%; margin: 15px 0;
+      background: #fff; box-shadow: 0 0 4px rgba(0,0,0,0.1);
+    }
+    th, td {
+      border: 1px solid #ddd; padding: 8px; text-align: right;
+    }
+    th { background: #f0f3f7; font-weight: bold; }
+    .section { margin-bottom: 20px; }
     .hidden { display: none; }
-    button { margin: 5px; padding: 8px 12px; border-radius: 6px; cursor: pointer; background:#fff; border:1px solid #ccc; }
-    button:hover { background:#eef; }
-    #result { white-space: pre-wrap; background: #fff; padding: 10px; border: 1px solid #ccc; margin-top: 10px; max-height:400px; overflow-y:auto; }
-    .tabs { margin-bottom:20px; }
-    .tabs button { margin-left:10px; }
-    .section { background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:15px; }
+    footer {
+      margin-top: 40px; padding: 15px;
+      text-align: center; font-size: 0.9em; color: #555;
+      border-top: 1px solid #ccc;
+    }
   </style>
 </head>
 <body>
-  <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
+  <header>
+    <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
+  </header>
 
-  <!-- מסך כניסה -->
-  <div id="loginScreen">
-    <label>Token:</label><br>
-    <input type="text" id="tokenInput" size="60"><br><br>
-    <button onclick="saveToken()">שמור והתחבר</button>
+  <div class="container">
+    <!-- מסך כניסה -->
+    <div id="loginScreen">
+      <h2>התחברות עם Token</h2>
+      <p>הכנס את ה-Token שלך כדי להתחבר לממשק:</p>
+      <input type="password" id="tokenInput" size="60" placeholder="הכנס כאן את ה-Token"><br><br>
+      <button onclick="saveToken()">שמור והתחבר</button>
+    </div>
+
+    <!-- מסך ראשי -->
+    <div id="mainScreen" class="hidden">
+      <div class="tabs">
+        <button id="tabHierarchyBtn" onclick="showTab('hierarchy')" class="active">📚 ממשק היררכי</button>
+        <button id="tabFunctionsBtn" onclick="showTab('functions')">⚙️ פונקציות זמינות</button>
+        <button onclick="deleteToken()">🗑️ מחק Token</button>
+      </div>
+
+      <!-- היררכיה -->
+      <div id="hierarchyTab" class="tab">
+        <div id="years" class="section"></div>
+        <div id="semesters" class="section"></div>
+        <div id="courses" class="section"></div>
+        <div id="assignments" class="section"></div>
+        <div id="submissions" class="section"></div>
+      </div>
+
+      <!-- פונקציות -->
+      <div id="functionsTab" class="tab hidden">
+        <h2>כל הפונקציות הזמינות</h2>
+        <div id="functions" class="section"></div>
+        <pre id="result"></pre>
+      </div>
+    </div>
   </div>
 
-  <!-- מסך ראשי -->
-  <div id="mainScreen" class="hidden">
-    <div class="tabs">
-      <button onclick="showTab('hierarchy')">📚 ממשק היררכי</button>
-      <button onclick="showTab('functions')">⚙️ כל הפונקציות הזמינות לי</button>
-      <button onclick="deleteToken()">🗑️ מחק Token</button>
-    </div>
+  <footer>
+    פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding
+  </footer>
 
-    <div id="hierarchyTab" class="tab">
-      <div id="years"></div>
-      <div id="semesters"></div>
-      <div id="courses"></div>
-      <div id="assignments"></div>
-      <div id="submissions"></div>
-    </div>
+<script>
+  const baseUrl = "https://moodle4.talpiot.ac.il";
+  let token = localStorage.getItem("moodleToken") || "";
 
-    <div id="functionsTab" class="tab hidden">
-      <h3>רשימת פונקציות מה־token שלך</h3>
-      <div id="functions"></div>
-      <div id="result"></div>
-    </div>
-  </div>
+  const loginScreen = document.getElementById("loginScreen");
+  const mainScreen = document.getElementById("mainScreen");
 
-  <script>
-    const baseUrl = "https://moodle4.talpiot.ac.il";
-    let token = localStorage.getItem("moodleToken") || "";
+  window.onload = () => { if (token) init(); };
 
-    const loginScreen = document.getElementById("loginScreen");
-    const mainScreen = document.getElementById("mainScreen");
+  function saveToken() {
+    token = document.getElementById("tokenInput").value.trim();
+    if (!token) { alert("נא להזין Token"); return; }
+    localStorage.setItem("moodleToken", token);
+    init();
+  }
 
-    window.onload = () => { if (token) init(); };
+  function deleteToken() {
+    localStorage.removeItem("moodleToken");
+    location.reload();
+  }
 
-    function saveToken() {
-      token = document.getElementById("tokenInput").value.trim();
-      if (!token) { alert("נא להזין טוקן"); return; }
-      localStorage.setItem("moodleToken", token);
-      init();
+  function showTab(tab) {
+    document.getElementById("hierarchyTab").classList.add("hidden");
+    document.getElementById("functionsTab").classList.add("hidden");
+    document.getElementById("tabHierarchyBtn").classList.remove("active");
+    document.getElementById("tabFunctionsBtn").classList.remove("active");
+    if (tab === "hierarchy") {
+      document.getElementById("hierarchyTab").classList.remove("hidden");
+      document.getElementById("tabHierarchyBtn").classList.add("active");
     }
-
-    function deleteToken() {
-      localStorage.removeItem("moodleToken");
-      location.reload();
+    if (tab === "functions") {
+      document.getElementById("functionsTab").classList.remove("hidden");
+      document.getElementById("tabFunctionsBtn").classList.add("active");
     }
+  }
 
-    function showTab(tab) {
-      document.getElementById("hierarchyTab").classList.add("hidden");
-      document.getElementById("functionsTab").classList.add("hidden");
-      if (tab === "hierarchy") document.getElementById("hierarchyTab").classList.remove("hidden");
-      if (tab === "functions") document.getElementById("functionsTab").classList.remove("hidden");
-    }
+  async function apiCall(func, params={}) {
+    const q = new URLSearchParams({ wstoken: token, wsfunction: func, moodlewsrestformat:"json" });
+    for (const [k,v] of Object.entries(params)) q.append(k,v);
+    const res = await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
+    return await res.json();
+  }
 
-    async function init() {
-      loginScreen.classList.add("hidden");
-      mainScreen.classList.remove("hidden");
-      await loadFunctions();
-      await loadCourses();
-    }
+  async function init() {
+    loginScreen.classList.add("hidden");
+    mainScreen.classList.remove("hidden");
+    await loadFunctions();
+    await loadCourses();
+  }
 
-    // ---- פונקציות כלליות ----
-    async function apiCall(func, params={}) {
-      const q = new URLSearchParams({ wstoken: token, wsfunction: func, moodlewsrestformat:"json" });
-      for (const [k,v] of Object.entries(params)) q.append(k,v);
-      const res = await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
-      return await res.json();
-    }
+  // --- פונקציות ---
+  async function loadFunctions() {
+    const info = await apiCall("core_webservice_get_site_info");
+    const funcs = info.functions || [];
+    const div = document.getElementById("functions");
+    div.innerHTML = "";
+    funcs.forEach(f => {
+      const btn = document.createElement("button");
+      btn.textContent = f.name;
+      btn.onclick = async () => {
+        const data = await apiCall(f.name);
+        document.getElementById("result").textContent = JSON.stringify(data,null,2);
+      };
+      div.appendChild(btn);
+    });
+  }
 
-    // ---- פונקציות זמינות ----
-    async function loadFunctions() {
-      const info = await apiCall("core_webservice_get_site_info");
-      const funcs = info.functions || [];
-      const div = document.getElementById("functions");
-      div.innerHTML = "";
-      funcs.forEach(f => {
-        const btn = document.createElement("button");
-        btn.textContent = f.name;
-        btn.onclick = async () => {
-          const data = await apiCall(f.name);
-          document.getElementById("result").textContent = JSON.stringify(data,null,2);
-        };
-        div.appendChild(btn);
+  // --- היררכיה ---
+  async function loadCourses() {
+    const info = await apiCall("core_webservice_get_site_info");
+    const courses = await apiCall("core_enrol_get_users_courses", { userid: info.userid });
+    const yearsDiv = document.getElementById("years");
+    yearsDiv.innerHTML = "<h3>שנות לימוד</h3>";
+    const years = {};
+    courses.forEach(c => {
+      const year = (c.fullname.match(/20\\d{2}/)||["לא ידוע"])[0];
+      if (!years[year]) years[year]=[];
+      years[year].push(c);
+    });
+    Object.keys(years).forEach(y=>{
+      const btn=document.createElement("button");
+      btn.textContent=y;
+      btn.onclick=()=>showSemesters(years[y]);
+      yearsDiv.appendChild(btn);
+    });
+  }
+
+  function showSemesters(courses) {
+    const semDiv=document.getElementById("semesters");
+    semDiv.innerHTML="<h3>סמסטרים</h3>";
+    document.getElementById("courses").innerHTML="";
+    const sems={};
+    courses.forEach(c=>{
+      const sem=(c.fullname.match(/סמסטר.?[אב]/)||["לא מוגדר"])[0];
+      if(!sems[sem]) sems[sem]=[];
+      sems[sem].push(c);
+    });
+    Object.keys(sems).forEach(s=>{
+      const btn=document.createElement("button");
+      btn.textContent=s;
+      btn.onclick=()=>showCourses(sems[s]);
+      semDiv.appendChild(btn);
+    });
+  }
+
+  function showCourses(courses) {
+    const div=document.getElementById("courses");
+    div.innerHTML="<h3>קורסים</h3>";
+    courses.forEach(c=>{
+      const btn=document.createElement("button");
+      btn.textContent=c.fullname;
+      btn.onclick=()=>loadAssignments(c.id);
+      div.appendChild(btn);
+    });
+  }
+
+  async function loadAssignments(courseid) {
+    const data=await apiCall("mod_assign_get_assignments", {"courseids[0]":courseid});
+    const assigns=(data.courses && data.courses[0])?data.courses[0].assignments:[];
+    const div=document.getElementById("assignments");
+    div.innerHTML="<h3>מטלות</h3>";
+    if (assigns.length===0) { div.innerHTML+="<p>אין מטלות בקורס זה</p>"; return; }
+    let html="<table><tr><th>שם מטלה</th><th>פתיחה</th><th>דדליין</th></tr>";
+    assigns.forEach(a=>{
+      html+=`<tr>
+        <td><button onclick="loadSubmissions(${a.id})">${a.name}</button></td>
+        <td>${a.allowsubmissionsfromdate ? new Date(a.allowsubmissionsfromdate*1000).toLocaleString() : "-"}</td>
+        <td>${a.duedate ? new Date(a.duedate*1000).toLocaleString() : "-"}</td>
+      </tr>`;
+    });
+    html+="</table>";
+    div.innerHTML+=html;
+  }
+
+  async function loadSubmissions(assignid) {
+    const subsData=await apiCall("mod_assign_get_submissions", {"assignmentids[0]":assignid});
+    const subs=(subsData.assignments && subsData.assignments[0])?subsData.assignments[0].submissions:[];
+    const gradesData=await apiCall("mod_assign_get_grades", {"assignmentids[0]":assignid});
+    const grades=(gradesData.assignments && gradesData.assignments[0])?gradesData.assignments[0].grades:[];
+    const gradesMap={}; grades.forEach(g=>gradesMap[g.userid]=g.grade);
+
+    const div=document.getElementById("submissions");
+    div.innerHTML="<h3>הגשות</h3>";
+    if (subs.length===0) { div.innerHTML+="<p>אין הגשות</p>"; return; }
+
+    let html="<table><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th></tr>";
+    subs.forEach(s=>{
+      let files=[];
+      (s.plugins||[]).forEach(p=>{
+        (p.fileareas||[]).forEach(fa=>{
+          (fa.files||[]).forEach(file=>{
+            const url=file.fileurl+"&token="+token;
+            files.push(`<a href='${url}' target='_blank'>${file.filename}</a>`);
+          });
+        });
       });
-    }
-
-    // ---- ממשק היררכי ----
-    async function loadCourses() {
-      const info = await apiCall("core_webservice_get_site_info");
-      const courses = await apiCall("core_enrol_get_users_courses", { userid: info.userid });
-      // חלוקה לפי שנה
-      const yearsDiv = document.getElementById("years");
-      yearsDiv.innerHTML = "<h3>שנות לימוד</h3>";
-      const years = {};
-      courses.forEach(c => {
-        const year = (c.fullname.match(/20\\d{2}/)||["אחר"])[0];
-        if (!years[year]) years[year]=[];
-        years[year].push(c);
-      });
-      Object.keys(years).forEach(y=>{
-        const btn=document.createElement("button");
-        btn.textContent=y;
-        btn.onclick=()=>showSemesters(years[y]);
-        yearsDiv.appendChild(btn);
-      });
-    }
-
-    function showSemesters(courses) {
-      document.getElementById("semesters").innerHTML="<h3>סמסטרים</h3>";
-      document.getElementById("courses").innerHTML="";
-      const sems={};
-      courses.forEach(c=>{
-        const sem=(c.fullname.match(/סמסטר.?[אב]/)||["לא מוגדר"])[0];
-        if(!sems[sem]) sems[sem]=[];
-        sems[sem].push(c);
-      });
-      Object.keys(sems).forEach(s=>{
-        const btn=document.createElement("button");
-        btn.textContent=s;
-        btn.onclick=()=>showCourses(sems[s]);
-        document.getElementById("semesters").appendChild(btn);
-      });
-    }
-
-    function showCourses(courses) {
-      const div=document.getElementById("courses");
-      div.innerHTML="<h3>קורסים</h3>";
-      courses.forEach(c=>{
-        const btn=document.createElement("button");
-        btn.textContent=c.fullname;
-        btn.onclick=()=>loadAssignments(c.id);
-        div.appendChild(btn);
-      });
-    }
-
-    async function loadAssignments(courseid) {
-      const data=await apiCall("mod_assign_get_assignments", {"courseids[0]":courseid});
-      const assigns=(data.courses && data.courses[0])?data.courses[0].assignments:[];
-      const div=document.getElementById("assignments");
-      div.innerHTML="<h3>מטלות</h3>";
-      assigns.forEach(a=>{
-        const btn=document.createElement("button");
-        btn.textContent=a.name;
-        btn.onclick=()=>loadSubmissions(a.id);
-        div.appendChild(btn);
-      });
-    }
-
-    async function loadSubmissions(assignid) {
-      const data=await apiCall("mod_assign_get_submissions", {"assignmentids[0]":assignid});
-      const subs=(data.assignments && data.assignments[0])?data.assignments[0].submissions:[];
-      const div=document.getElementById("submissions");
-      div.innerHTML="<h3>הגשות</h3><pre>"+JSON.stringify(subs,null,2)+"</pre>";
-    }
-  </script>
+      html+=`<tr>
+        <td>${s.userid}</td>
+        <td>${files.join("<br>") || "-"}</td>
+        <td>${gradesMap[s.userid] ?? "-"}</td>
+      </tr>`;
+    });
+    html+="</table>";
+    div.innerHTML+=html;
+  }
+</script>
 </body>
 </html>
