@@ -5,43 +5,34 @@
   <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root{ --blue:#0b4d88; --accent:#0d63b5; --accent2:#0b58a4; --light:#f5f7fb; --card:#ffffff; --muted:#6b7280; --line:#e5e7eb }
-    *{box-sizing:border-box}
+    :root{--blue:#0b4d88;--accent:#0d63b5;--accent2:#0b58a4;--light:#f5f7fb;--card:#ffffff;--muted:#6b7280;--line:#e5e7eb}
     body{margin:0;background:var(--light);color:#1f2937;font-family:"Segoe UI","Rubik",Tahoma,Arial,sans-serif}
     header{background:var(--blue);color:#fff;padding:22px 16px}
     header .wrap{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
-    h1{margin:0;font-size:clamp(18px,2.6vw,28px)}
+    h1{margin:0;font-size:22px}
     .top-actions{display:flex;gap:10px;flex-wrap:wrap}
-    .btn{appearance:none;border:1px solid #ccd6e4;background:var(--accent);color:#fff;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer}
-    .btn:hover{background:var(--accent2)}
-    .btn.secondary{background:#eef3f9;color:#0b2743;border:1px solid #d4dbe6}
-    .btn.danger{background:#ffe8e8;color:#7a0d0d;border-color:#ffd1d1}
+    .danger{background:#ffe8e8;color:#7a0d0d;border:1px solid #ffd1d1;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:700}
     .container{max-width:1200px;margin:auto;padding:18px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
-    .section-title{margin:0 0 10px;font-size:19px}
-    .hidden{display:none}
-    .muted{color:var(--muted)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
     .pillbar{display:flex;flex-wrap:wrap;gap:10px}
     .pill{border:1px solid #dbe3ed;background:#eef2f7;padding:9px 13px;border-radius:999px;cursor:pointer;font-weight:600}
-    .pill.selected{background:var(--accent);color:#fff;border-color:#0a4c8a}
+    .pill.selected{background:var(--accent);color:#fff}
     .crumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .crumb{background:#f1f5fb;border:1px solid #dbe3ed;border-radius:999px;padding:6px 10px}
-    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-    thead th{background:#f2f5f9;text-align:right;padding:10px;border-bottom:1px solid var(--line);font-weight:800}
-    tbody td{padding:10px;border-top:1px solid var(--line);vertical-align:top}
-    tbody tr:nth-child(even){background:#fcfdff}
-    .nowrap{white-space:nowrap}
-    .files a{display:inline-block;margin:0 0 6px 8px;text-decoration:underline}
-    .ok{padding:10px;background:#e9f9f2;border:1px solid #c7f0df;border-radius:10px;color:#0a7f48}
-    .error{padding:10px;background:#ffecec;border:1px solid #ffc9c9;border-radius:10px;color:#7a0d0d}
-    .grade-input{width:90px;padding:6px;border:1px solid #d9dee6;border-radius:8px}
-    .fb-input{width:100%;min-width:220px;padding:6px;border:1px solid #d9dee6;border-radius:8px;resize:vertical}
-    .rubric{margin-top:8px;background:#f9fbff;border:1px dashed #cfe0ff;border-radius:8px;padding:8px}
-    .rubric h4{margin:0 0 6px;font-size:16px}
-    .rubric table{border:1px solid #dbe3ed;margin-top:6px}
-    footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
-    #debugPanel{direction:ltr}
-    #debugOut{white-space:pre-wrap;max-height:260px;overflow:auto}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:6px 12px;cursor:pointer}
+    .btn:hover{background:var(--accent2)}
+    .btn.secondary{background:#eef3f9;color:#0b2743;border:1px solid #d4dbe6}
+    .hidden{display:none!important}
+    table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px}
+    th,td{border:1px solid #ddd;padding:8px;text-align:right;vertical-align:top}
+    th{background:#f0f4f8}
+    .files a{display:block;margin:2px 0;text-decoration:underline}
+    .ok{padding:10px;background:#e9f9f2;border:1px solid #c7f0df;border-radius:10px;color:#0a7f48;margin-top:10px}
+    .error{padding:10px;background:#ffecec;border:1px solid #ffc9c9;border-radius:10px;color:#7a0d0d;margin-top:10px}
+    .grade-input{width:70px}
+    .fb-input{width:100%;min-width:200px}
+    .muted{color:var(--muted);font-size:0.9em}
+    footer{text-align:center;color:#555;padding:15px;border-top:1px solid #ddd;margin-top:20px}
   </style>
 </head>
 <body>
@@ -49,88 +40,235 @@
     <div class="wrap">
       <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
       <div class="top-actions">
-        <button class="btn danger" onclick="deleteToken()">מחק Token 🗑️</button>
-        <button class="btn secondary" id="dbgToggle" onclick="toggleDebug()">מצב דיבוג: כבוי</button>
+        <button class="danger" onclick="deleteToken()">מחק Token 🗑️</button>
       </div>
     </div>
   </header>
 
   <div class="container">
+
+    <!-- Login -->
     <div id="loginScreen" class="card">
-      <h2 class="section-title">התחברות עם Token</h2>
-      <p class="muted">ה-Token נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
+      <h2>התחברות עם Token</h2>
       <input type="password" id="tokenInput" placeholder="הדבק כאן את ה-Token" style="width:60%">
-      <div style="margin-top:10px"><button class="btn" onclick="saveToken()">שמור והתחבר</button></div>
+      <button class="btn" onclick="saveToken()">שמור</button>
     </div>
+
+    <!-- Main -->
     <div id="mainScreen" class="hidden">
-      <div id="submissions" class="card hidden">
-        <h3 class="section-title" id="subsTitle">הגשות</h3>
-        <div id="subsArea"></div>
-        <div id="subsMsg" class="ok hidden" style="margin-top:10px"></div>
-        <div id="subsErr" class="error hidden" style="margin-top:10px"></div>
+      <div id="crumbsBox" class="card hidden">
+        <div class="crumbs">
+          <div id="crumbYear" class="crumb hidden"></div>
+          <div id="crumbSem" class="crumb hidden"></div>
+          <div id="crumbCourse" class="crumb hidden"></div>
+          <div id="crumbAssign" class="crumb hidden"></div>
+          <button class="btn secondary" onclick="resetSelections()">נקה בחירות</button>
+        </div>
       </div>
-      <details id="debugPanel" class="card hidden">
-        <summary><strong>Debug</strong></summary>
-        <pre id="debugOut"></pre>
-      </details>
+
+      <div id="hierarchyTab">
+        <div id="years" class="card">
+          <h3>שנות לימוד</h3>
+          <div id="yearsBar" class="pillbar"></div>
+        </div>
+        <div id="semesters" class="card hidden">
+          <h3>סמסטרים</h3>
+          <div id="semsBar" class="pillbar"></div>
+        </div>
+        <div id="courses" class="card hidden">
+          <h3>קורסים</h3>
+          <div id="coursesBar" class="pillbar"></div>
+        </div>
+        <div id="assignments" class="card hidden">
+          <h3>מטלות</h3>
+          <div id="assignList"></div>
+        </div>
+        <div id="submissions" class="card hidden">
+          <h3 id="subsTitle">הגשות</h3>
+          <div id="subsArea"></div>
+          <div id="subsMsg" class="ok hidden"></div>
+          <div id="subsErr" class="error hidden"></div>
+        </div>
+      </div>
     </div>
+
     <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
   </div>
 
 <script>
-  let token = localStorage.getItem("moodleToken") || "";
-  const byId=(id)=>document.getElementById(id);
-  let DEBUG=false;
-  function toggleDebug(){ DEBUG=!DEBUG; byId('dbgToggle').textContent = `מצב דיבוג: ${DEBUG?"פועל":"כבוי"}`; byId('debugPanel').classList.toggle('hidden', !DEBUG); }
-  function debugLog(tag,payload){ if(!DEBUG) return; const out=byId('debugOut'); const ts=new Date().toISOString(); out.textContent +=`\n[${ts}] ${tag}:\n`+JSON.stringify(payload,null,2)+"\n"; out.scrollTop=out.scrollHeight; }
-  function saveToken(){ token=byId("tokenInput").value.trim(); if(!token){alert("נא להזין Token");return;} localStorage.setItem("moodleToken",token); init(); }
-  function deleteToken(){ localStorage.removeItem("moodleToken"); location.reload(); }
+const baseUrl="https://moodle4.talpiot.ac.il";
+let token=localStorage.getItem("moodleToken")||"";
+const state={me:null,courses:[],selectedYear:null,selectedSem:null,selectedCourse:null,enrolled:new Map(),assignId:null,assignName:""};
 
-  async function apiCall(wsfunction, params={}){
-    const q=new URLSearchParams({wstoken:token,wsfunction,moodlewsrestformat:"json"});
-    for(const [k,v] of Object.entries(params)) q.append(k,v);
-    const url=`https://moodle4.talpiot.ac.il/webservice/rest/server.php?${q.toString()}`;
-    debugLog("REQUEST",{wsfunction,url,params});
-    const res=await fetch(url);
-    const text=await res.text();
-    let data; try{data=JSON.parse(text);}catch{data={raw:text}};
-    debugLog("RESPONSE",{wsfunction,data});
-    if(data && (data.exception||data.errorcode)) throw new Error(data.message||data.errorcode);
-    return data;
+window.onload=()=>{if(token)init();};
+
+function saveToken(){token=document.getElementById("tokenInput").value.trim();if(!token)return;localStorage.setItem("moodleToken",token);init();}
+function deleteToken(){localStorage.removeItem("moodleToken");location.reload();}
+
+async function apiCall(wsfunction,params={}){
+  const q=new URLSearchParams({wstoken:token,wsfunction,moodlewsrestformat:"json"});
+  for(const[k,v]of Object.entries(params))q.append(k,v);
+  const res=await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
+  const d=await res.json();
+  if(d.exception||d.errorcode)throw new Error(d.message||d.debuginfo||"API Error");
+  return d;
+}
+
+const fmtDate=ts=>ts?new Date(ts*1000).toLocaleString():"–";
+const fmtGrade=g=>(g==null||g==="")?"–":parseInt(g);
+
+async function init(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("mainScreen").classList.remove("hidden");
+  state.me=await apiCall("core_webservice_get_site_info");
+  state.courses=await apiCall("core_enrol_get_users_courses",{userid:state.me.userid});
+  renderYears();
+}
+
+function detectYearLabel(n){const m=n.match(/תשפ.?/);if(m)return m[0];const g=n.match(/20\d{2}/);return g?g[0]:"לא ידוע";}
+function detectSemesterLabel(n){if(/סמסטר.?א/.test(n))return"סמסטר א";if(/סמסטר.?ב/.test(n))return"סמסטר ב";if(/סמסטר.?ק/.test(n)||/קיץ/.test(n))return"סמסטר ק";if(/סמסטר.?ש/.test(n)||/שנתי/.test(n))return"סמסטר ש";return"לא מוגדר";}
+
+function renderYears(){const bar=document.getElementById("yearsBar");bar.innerHTML="";const groups=new Map();state.courses.forEach(c=>{const y=detectYearLabel(c.fullname||"");if(!groups.has(y))groups.set(y,[]);groups.get(y).push(c);});groups.forEach((arr,y)=>{const b=document.createElement("button");b.className="pill";b.textContent=y;b.onclick=()=>renderSemesters(arr,y);bar.appendChild(b);});}
+
+function renderSemesters(courses,y){state.selectedYear=y;document.getElementById("semesters").classList.remove("hidden");const bar=document.getElementById("semsBar");bar.innerHTML="";const groups=new Map();courses.forEach(c=>{const s=detectSemesterLabel(c.fullname||"");if(!groups.has(s))groups.set(s,[]);groups.get(s).push(c);});groups.forEach((arr,s)=>{const b=document.createElement("button");b.className="pill";b.textContent=s;b.onclick=()=>renderCourses(arr,s);bar.appendChild(b);});}
+
+function renderCourses(courses,s){state.selectedSem=s;document.getElementById("courses").classList.remove("hidden");const bar=document.getElementById("coursesBar");bar.innerHTML="";courses.forEach(c=>{const b=document.createElement("button");b.className="pill";b.textContent=c.fullname;b.onclick=()=>openCourse(c);bar.appendChild(b);});}
+
+async function openCourse(c){state.selectedCourse=c;document.getElementById("assignments").classList.remove("hidden");const users=await apiCall("core_enrol_get_enrolled_users",{courseid:c.id});state.enrolled.set(c.id,users);const data=await apiCall("mod_assign_get_assignments",{"courseids[0]":c.id});const assigns=data.courses[0]?.assignments||[];let html="<table><tr><th>מטלה</th><th>פתיחה</th><th>דדליין</th></tr>";assigns.forEach(a=>{html+=`<tr><td><button class="btn secondary" onclick="loadSubs(${a.id},'${a.name}')">${a.name}</button></td><td>${fmtDate(a.allowsubmissionsfromdate)}</td><td>${fmtDate(a.duedate)}</td></tr>`;});html+="</table>";document.getElementById("assignList").innerHTML=html;}
+
+async function loadSubs(aid,name){
+  state.assignId=aid;state.assignName=name;
+  document.getElementById("subsTitle").textContent="הגשות במטלה: "+name;
+  document.getElementById("submissions").classList.remove("hidden");
+  document.getElementById("subsArea").innerHTML="טוען...";
+  document.getElementById("subsMsg").classList.add("hidden");
+  document.getElementById("subsErr").classList.add("hidden");
+  
+  try{
+    const [subs,grades]=await Promise.all([
+      apiCall("mod_assign_get_submissions",{"assignmentids[0]":aid}),
+      apiCall("mod_assign_get_grades",{"assignmentids[0]":aid})
+    ]);
+    const submissions=subs.assignments[0]?.submissions||[];
+    const gradesMap=new Map();(grades.assignments[0]?.grades||[]).forEach(g=>gradesMap.set(g.userid,g));
+    const users=state.enrolled.get(state.selectedCourse.id)||[];
+
+    let html="<table><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב</th><th>עדכון</th></tr>";
+    for(const s of submissions){
+      const u=users.find(x=>x.id===s.userid);
+      const g=gradesMap.get(s.userid);
+      const grade=fmtGrade(g?.grade);
+      const fb=await getFeedback(aid,s.userid);
+
+      const files=[];s.plugins?.forEach(p=>p.fileareas?.forEach(fa=>fa.files?.forEach(f=>{
+        const url=f.fileurl.includes("token=")?f.fileurl:f.fileurl+"?token="+token;
+        files.push(`<a href="${url}" target="_blank">${f.filename}</a>`);
+      })));
+
+      html+=`<tr>
+        <td><b>${u?.fullname||s.userid}</b><br><span class="muted">${u?.email||""}</span></td>
+        <td class="files">${files.join("<br>")||"—"}</td>
+        <td>${grade}</td>
+        <td><textarea id="fb_${s.userid}" class="fb-input" rows="2">${fb}</textarea></td>
+        <td><input type="number" id="g_${s.userid}" class="grade-input" placeholder="${grade}" value="${grade !== '–' ? grade : ''}"><button class="btn secondary" onclick="updateGrade(${aid},${s.userid})">שמור</button></td>
+      </tr>`;
+    }
+    html+="</table>";
+    document.getElementById("subsArea").innerHTML=html;
+  }catch(e){
+    console.error("Error loading submissions:", e);
+    document.getElementById("subsErr").textContent="שגיאה בטעינת הגשות: " + e.message;
+    document.getElementById("subsErr").classList.remove("hidden");
   }
+}
 
-  function fileUrlWithToken(rawUrl){
-    if(!rawUrl) return "#";
-    let url=rawUrl.replace("/pluginfile.php/","/webservice/pluginfile.php/");
-    if(!url.includes("token=")) url+=(url.includes("?")?"&":"?")+"token="+encodeURIComponent(token);
-    return url;
-  }
-
-  async function updateGrade(assignId, userId){
-    const inp=byId(`g_${userId}`);
-    const fb=byId(`fb_${userId}`);
-    const gradeVal=(inp?.value||'').trim();
-    const fbText=(fb?.value||'').trim();
-    try{
-      let fbPluginType="comments";
-      const fbData=await apiCall('mod_assign_get_submission_status',{assignid:assignId,userid:userId});
-      const plugins=fbData?.feedback?.plugins||[];
-      const p=plugins.find(p=>p.type==="comments"||/comments/i.test(p.name||""));
-      if(p) fbPluginType=p.type;
-      const params={assignmentid:assignId,userid:userId,attemptnumber:-1,workflowstate:'graded',addattempt:0,applytoall:0};
-      if(fbText!==''){
-        params[`plugindata[${fbPluginType}][text]`]=fbText;
-        params[`plugindata[${fbPluginType}][format]`]=1;
-        params[`plugindata[${fbPluginType}][itemid]`]=0;
+async function getFeedback(aid,uid){
+  try{
+    const st=await apiCall("mod_assign_get_submission_status",{assignid:aid,userid:uid});
+    const plugins=st?.feedback?.plugins||[];
+    for(const p of plugins){
+      if(p.type==="comments"&&p.editorfields){
+        return p.editorfields[0]?.text||"";
       }
-      if(gradeVal!=='') params.grade=gradeVal;
-      debugLog('SAVE_GRADE_PARAMS',params);
-      const resp=await apiCall('mod_assign_save_grade',params);
-      debugLog('SAVE_GRADE_RESP',resp);
-      byId('subsMsg').textContent='הציון/משוב עודכנו בהצלחה.';
-      byId('subsMsg').classList.remove('hidden');
-    }catch(e){ debugLog('SAVE_GRADE_ERROR',{message:e.message}); alert('עדכון נכשל: '+e.message); }
+    }
+    return "";
+  }catch{return "";}
+}
+
+async function updateGrade(aid, uid) {
+  const gradeInput = document.getElementById(`g_${uid}`);
+  const fbInput = document.getElementById(`fb_${uid}`);
+  const grade = gradeInput.value.trim();
+  const fb = fbInput.value;
+  
+  // נקה הודעות קודמות
+  document.getElementById("subsMsg").classList.add("hidden");
+  document.getElementById("subsErr").classList.add("hidden");
+  
+  try {
+    // קודם נקבל את הסטטוס כדי למצוא את מספר הניסיון
+    const status = await apiCall("mod_assign_get_submission_status", {
+      assignid: aid,
+      userid: uid
+    });
+    
+    const attemptnumber = status.lastattempt?.submission?.attemptnumber || 0;
+    console.log(`Updating grade for user ${uid}, attempt ${attemptnumber}, grade: ${grade}`);
+    
+    // בנה את הפרמטרים
+    const params = {
+      assignmentid: aid,
+      userid: uid,
+      attemptnumber: attemptnumber
+    };
+    
+    // הוסף ציון אם קיים
+    if (grade !== "") {
+      params.grade = grade;
+    }
+    
+    // הוסף משוב
+    params["plugindata[assignfeedbackcomments_editor][text]"] = fb;
+    params["plugindata[assignfeedbackcomments_editor][format]"] = 1;
+    
+    console.log("API params:", params);
+    
+    // שמור את הציון והמשוב
+    const result = await apiCall("mod_assign_save_grade", params);
+    console.log("Save grade result:", result);
+    
+    document.getElementById("subsMsg").textContent = "עודכן בהצלחה!";
+    document.getElementById("subsMsg").classList.remove("hidden");
+    
+    // מרענן את הטבלה אחרי 1 שנייה
+    setTimeout(() => {
+      loadSubs(aid, state.assignName);
+    }, 1000);
+    
+  } catch (e) {
+    console.error("Error updating grade:", e);
+    document.getElementById("subsErr").textContent = "שגיאה בעדכון: " + e.message;
+    document.getElementById("subsErr").classList.remove("hidden");
   }
+}
+
+function resetSelections() {
+  state.selectedYear = null;
+  state.selectedSem = null;
+  state.selectedCourse = null;
+  state.assignId = null;
+  state.assignName = "";
+  
+  // הסתר את כל הקטעים
+  document.getElementById("crumbsBox").classList.add("hidden");
+  document.getElementById("semesters").classList.add("hidden");
+  document.getElementById("courses").classList.add("hidden");
+  document.getElementById("assignments").classList.add("hidden");
+  document.getElementById("submissions").classList.add("hidden");
+  
+  // חזור לרינדור השנים
+  renderYears();
+}
 </script>
 </body>
 </html>
