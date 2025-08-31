@@ -56,188 +56,81 @@
   </header>
 
   <div class="container">
-
-    <!-- Login -->
     <div id="loginScreen" class="card">
       <h2 class="section-title">התחברות עם Token</h2>
       <p class="muted">ה-Token נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
       <input type="password" id="tokenInput" placeholder="הדבק כאן את ה-Token" style="width:60%">
       <div style="margin-top:10px"><button class="btn" onclick="saveToken()">שמור והתחבר</button></div>
     </div>
-
-    <!-- Main -->
     <div id="mainScreen" class="hidden">
-
-      <!-- Breadcrumb selections -->
-      <div id="crumbsBox" class="card hidden">
-        <div class="crumbs">
-          <div id="crumbYear" class="crumb hidden"></div>
-          <div id="crumbSem" class="crumb hidden"></div>
-          <div id="crumbCourse" class="crumb hidden"></div>
-          <div id="crumbAssign" class="crumb hidden"></div>
-          <button class="btn secondary" onclick="resetSelections()">נקה בחירות</button>
-        </div>
-      </div>
-
-      <!-- HIERARCHY -->
-      <div id="years" class="card">
-        <h3 class="section-title">שנות לימוד</h3>
-        <div id="yearsBar" class="pillbar"></div>
-        <div id="yearsEmpty" class="muted hidden">לא נמצאו שנים</div>
-      </div>
-
-      <div id="semesters" class="card hidden">
-        <h3 class="section-title">סמסטרים</h3>
-        <div id="semsBar" class="pillbar"></div>
-      </div>
-
-      <div id="courses" class="card hidden">
-        <h3 class="section-title">קורסים</h3>
-        <div id="coursesBar" class="pillbar"></div>
-      </div>
-
-      <div id="assignments" class="card hidden">
-        <h3 class="section-title">מטלות</h3>
-        <div id="assignRubricDef" class="rubric hidden"></div>
-        <div id="assignList"></div>
-      </div>
-
       <div id="submissions" class="card hidden">
         <h3 class="section-title" id="subsTitle">הגשות</h3>
         <div id="subsArea"></div>
         <div id="subsMsg" class="ok hidden" style="margin-top:10px"></div>
         <div id="subsErr" class="error hidden" style="margin-top:10px"></div>
       </div>
-
       <details id="debugPanel" class="card hidden">
         <summary><strong>Debug</strong></summary>
         <pre id="debugOut"></pre>
       </details>
     </div>
-
     <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
   </div>
 
 <script>
-  // ======= CONFIG & STATE =======
-  const baseUrl = "https://moodle4.talpiot.ac.il";
   let token = localStorage.getItem("moodleToken") || "";
-
-  const state = {
-    me: null,
-    courses: [],
-    selectedYear: null,
-    selectedSem: null,
-    selectedCourse: null,
-    enrolledByCourse: new Map(), // courseId -> [users]
-    currentAssignId: null,
-    currentAssignName: "",
-    assignMeta: new Map(),       // assignId -> { cmid, name, ... }
-    rubricDef: null              // { method: 'rubric'|'guide', criteria: [...], criteriaMap: Map }
-  };
-
-  // ======= DEBUG =======
+  const byId=(id)=>document.getElementById(id);
   let DEBUG=false;
-  const byId = (id)=>document.getElementById(id);
   function toggleDebug(){ DEBUG=!DEBUG; byId('dbgToggle').textContent = `מצב דיבוג: ${DEBUG?"פועל":"כבוי"}`; byId('debugPanel').classList.toggle('hidden', !DEBUG); }
-  function maskSecrets(obj){ try{ return JSON.parse(JSON.stringify(obj,(k,v)=>/(token|wstoken)/i.test(k)?"***":v)); }catch{ return obj; } }
-  function debugLog(tag, payload){ if(!DEBUG) return; const out = byId('debugOut'); const ts = new Date().toISOString(); out.textContent += `\n[${ts}] ${tag}:\n` + JSON.stringify(maskSecrets(payload), null, 2) + "\n"; out.scrollTop=out.scrollHeight; }
-
-  // ======= BOOT =======
-  window.addEventListener("load", () => { if (token) init(); });
-
-  function saveToken(){
-    token = byId("tokenInput").value.trim();
-    if(!token){ alert("נא להזין Token"); return; }
-    localStorage.setItem("moodleToken", token);
-    init();
-  }
+  function debugLog(tag,payload){ if(!DEBUG) return; const out=byId('debugOut'); const ts=new Date().toISOString(); out.textContent +=`\n[${ts}] ${tag}:\n`+JSON.stringify(payload,null,2)+"\n"; out.scrollTop=out.scrollHeight; }
+  function saveToken(){ token=byId("tokenInput").value.trim(); if(!token){alert("נא להזין Token");return;} localStorage.setItem("moodleToken",token); init(); }
   function deleteToken(){ localStorage.removeItem("moodleToken"); location.reload(); }
 
-  // ======= API & HELPERS =======
   async function apiCall(wsfunction, params={}){
-    const q = new URLSearchParams({ wstoken: token, wsfunction, moodlewsrestformat: "json" });
-    for (const [k,v] of Object.entries(params)) q.append(k, v);
-    const url = `${baseUrl}/webservice/rest/server.php?${q.toString()}`;
+    const q=new URLSearchParams({wstoken:token,wsfunction,moodlewsrestformat:"json"});
+    for(const [k,v] of Object.entries(params)) q.append(k,v);
+    const url=`https://moodle4.talpiot.ac.il/webservice/rest/server.php?${q.toString()}`;
+    debugLog("REQUEST",{wsfunction,url,params});
+    const res=await fetch(url);
+    const text=await res.text();
+    let data; try{data=JSON.parse(text);}catch{data={raw:text}};
+    debugLog("RESPONSE",{wsfunction,data});
+    if(data && (data.exception||data.errorcode)) throw new Error(data.message||data.errorcode);
+    return data;
+  }
+
+  function fileUrlWithToken(rawUrl){
+    if(!rawUrl) return "#";
+    let url=rawUrl.replace("/pluginfile.php/","/webservice/pluginfile.php/");
+    if(!url.includes("token=")) url+=(url.includes("?")?"&":"?")+"token="+encodeURIComponent(token);
+    return url;
+  }
+
+  async function updateGrade(assignId, userId){
+    const inp=byId(`g_${userId}`);
+    const fb=byId(`fb_${userId}`);
+    const gradeVal=(inp?.value||'').trim();
+    const fbText=(fb?.value||'').trim();
     try{
-      debugLog("REQUEST", {wsfunction, url, params});
-      const res = await fetch(url);
-      const text = await res.text();
-      let data; try{ data = JSON.parse(text); }catch{ data = { raw:text }; }
-      debugLog("RESPONSE", {wsfunction, data});
-      if (data && (data.exception || data.errorcode)) {
-        throw new Error(`${data.errorcode || data.exception}: ${data.message || "API error"}`);
+      let fbPluginType="comments";
+      const fbData=await apiCall('mod_assign_get_submission_status',{assignid:assignId,userid:userId});
+      const plugins=fbData?.feedback?.plugins||[];
+      const p=plugins.find(p=>p.type==="comments"||/comments/i.test(p.name||""));
+      if(p) fbPluginType=p.type;
+      const params={assignmentid:assignId,userid:userId,attemptnumber:-1,workflowstate:'graded',addattempt:0,applytoall:0};
+      if(fbText!==''){
+        params[`plugindata[${fbPluginType}][text]`]=fbText;
+        params[`plugindata[${fbPluginType}][format]`]=1;
+        params[`plugindata[${fbPluginType}][itemid]`]=0;
       }
-      return data;
-    }catch(e){ debugLog("ERROR", {wsfunction, message:e.message}); throw e; }
+      if(gradeVal!=='') params.grade=gradeVal;
+      debugLog('SAVE_GRADE_PARAMS',params);
+      const resp=await apiCall('mod_assign_save_grade',params);
+      debugLog('SAVE_GRADE_RESP',resp);
+      byId('subsMsg').textContent='הציון/משוב עודכנו בהצלחה.';
+      byId('subsMsg').classList.remove('hidden');
+    }catch(e){ debugLog('SAVE_GRADE_ERROR',{message:e.message}); alert('עדכון נכשל: '+e.message); }
   }
-  const fmtDate = (ts) => ts ? new Date(ts*1000).toLocaleString() : "–";
-  const fmtGradeInt = (g) => (g==null || g==="") ? "–" : String(Math.round(+g));
-  function cleanHtml(html){ if(!html) return ""; return String(html).replace(/<\/(p|div)>/gi, "\n").replace(/<br\s*\/?>(\s*)/gi, "\n").replace(/<[^>]+>/g, "").replace(/\n{3,}/g,"\n\n").trim(); }
-  function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
-  function markSelected(container, btn){ [...container.querySelectorAll('.pill')].forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); }
-  function fileUrlCandidates(url){ if(!url) return ["#"]; const set=new Set(); let a=url; if(!/(\?|&)token=/.test(a)) a+=(a.includes('?')?'&':'?')+'token='+encodeURIComponent(token); set.add(a); let b=url.replace('/pluginfile.php/','/webservice/pluginfile.php/'); if(!/(\?|&)token=/.test(b)) b+=(b.includes('?')?'&':'?')+'token='+encodeURIComponent(token); set.add(b); let c=b.includes('?')?b+'&forcedownload=1':b+'?forcedownload=1'; if(!/(\?|&)token=/.test(c)) c+='&token='+encodeURIComponent(token); set.add(c); return Array.from(set); }
-
-  // ======= YEAR / SEM DETECTION =======
-  function detectYearLabel(name){ if (!name) return "לא ידוע"; const heb = name.match(/תשפ.?[\"״׳']?[אבגדהוזחטיכלמנסעפצקרשת]?/); if (heb) return heb[0].replace(/[\""״׳']/g,""); const g = name.match(/20\d{2}/); return g ? g[0] : "לא ידוע"; }
-  function detectSemesterLabel(name){ if(!name) return "לא מוגדר"; if (/סמסטר.?א/.test(name)) return "סמסטר א"; if (/סמסטר.?ב/.test(name)) return "סמסטר ב"; if (/סמסטר.?ק/.test(name) || /קיץ/.test(name)) return "סמסטר ק"; if (/סמסטר.?ש/.test(name) || /שנתי/.test(name)) return "סמסטר ש"; return "לא מוגדר"; }
-
-  // ======= INIT =======
-  async function init(){
-    byId('loginScreen').classList.add('hidden');
-    byId('mainScreen').classList.remove('hidden');
-    resetSelections(true);
-    try{
-      state.me = await apiCall('core_webservice_get_site_info');
-      state.courses = await apiCall('core_enrol_get_users_courses', { userid: state.me.userid });
-      renderYears();
-    }catch(e){ alert('שגיאת התחברות: ' + e.message); deleteToken(); }
-  }
-
-  // ======= HIERARCHY FLOW =======
-  function resetSelections(skipCrumbs=false){ state.selectedYear=null; state.selectedSem=null; state.selectedCourse=null; state.currentAssignId=null; state.currentAssignName=""; state.assignMeta.clear(); state.rubricDef=null; if(!skipCrumbs) renderCrumbs(); byId('semesters').classList.add('hidden'); byId('courses').classList.add('hidden'); byId('assignments').classList.add('hidden'); byId('submissions').classList.add('hidden'); }
-  function renderCrumbs(){ const box=byId('crumbsBox'), year=byId('crumbYear'), sem=byId('crumbSem'), course=byId('crumbCourse'), assign=byId('crumbAssign'); let any=false; if(state.selectedYear){ year.textContent='שנה: '+state.selectedYear; year.classList.remove('hidden'); any=true;} else year.classList.add('hidden'); if(state.selectedSem){ sem.textContent='סמסטר: '+state.selectedSem; sem.classList.remove('hidden'); any=true;} else sem.classList.add('hidden'); if(state.selectedCourse){ course.textContent='קורס: '+(state.selectedCourse.fullname||state.selectedCourse.shortname); course.classList.remove('hidden'); any=true;} else course.classList.add('hidden'); if(state.currentAssignId){ assign.textContent='מטלה: '+state.currentAssignName; assign.classList.remove('hidden'); any=true;} else assign.classList.add('hidden'); box.classList.toggle('hidden',!any); }
-
-  function renderYears(){ const yearsBar=byId('yearsBar'), yearsEmpty=byId('yearsEmpty'); yearsBar.innerHTML=''; const groups=new Map(); state.courses.forEach(c=>{ const y=detectYearLabel(c.fullname||c.shortname||''); if(!groups.has(y)) groups.set(y,[]); groups.get(y).push(c); }); const years=Array.from(groups.keys()).sort((a,b)=> String(b).localeCompare(String(a),'he')); if(!years.length){ yearsEmpty.classList.remove('hidden'); return;} yearsEmpty.classList.add('hidden'); years.forEach(y=>{ const btn=document.createElement('button'); btn.className='pill'; btn.textContent=y; btn.onclick=()=>{ markSelected(yearsBar,btn); state.selectedYear=y; renderCrumbs(); renderSemesters(groups.get(y)); }; yearsBar.appendChild(btn); }); }
-
-  function renderSemesters(courses){ byId('semesters').classList.remove('hidden'); byId('courses').classList.add('hidden'); byId('assignments').classList.add('hidden'); byId('submissions').classList.add('hidden'); const semBar=byId('semsBar'); semBar.innerHTML=''; const order=['סמסטר א','סמסטר ב','סמסטר ק','סמסטר ש','לא מוגדר']; const semGroups=new Map(order.map(s=>[s,[]])); courses.forEach(c=>{ const s=detectSemesterLabel(c.fullname||c.shortname||''); semGroups.get(s??'לא מוגדר').push(c); }); order.forEach(s=>{ if(!semGroups.get(s).length) return; const btn=document.createElement('button'); btn.className='pill'; btn.textContent=s; btn.onclick=()=>{ markSelected(semBar,btn); state.selectedSem=s; renderCrumbs(); renderCourses(semGroups.get(s)); }; semBar.appendChild(btn); }); }
-
-  function renderCourses(courses){ const bar=byId('coursesBar'); bar.innerHTML=''; byId('courses').classList.remove('hidden'); byId('assignments').classList.add('hidden'); byId('submissions').classList.add('hidden'); courses.forEach(c=>{ const btn=document.createElement('button'); btn.className='pill'; btn.textContent=c.fullname||c.shortname||('קורס '+c.id); btn.onclick=()=>openCourse(c,btn); bar.appendChild(btn); }); }
-
-  async function openCourse(course, btnEl){ state.selectedCourse=course; renderCrumbs(); if(btnEl) markSelected(byId('coursesBar'),btnEl); byId('assignList').innerHTML="<div class='muted'>טוען מטלות…</div>"; byId('assignRubricDef').classList.add('hidden'); byId('assignments').classList.remove('hidden'); byId('submissions').classList.add('hidden'); if(!state.enrolledByCourse.has(course.id)){ try{ const users=await apiCall('core_enrol_get_enrolled_users',{courseid:course.id}); state.enrolledByCourse.set(course.id,users||[]);}catch(e){ state.enrolledByCourse.set(course.id,[]);} } try{ const data=await apiCall('mod_assign_get_assignments',{ 'courseids[0]':course.id }); const assigns=(data.courses&&data.courses[0])?data.courses[0].assignments:[]; state.assignMeta.clear(); if(!assigns.length){ byId('assignList').innerHTML="<div class='muted'>אין מטלות בקורס זה</div>"; return;} let html="<table><thead><tr><th>שם מטלה</th><th class='nowrap'>פתיחה</th><th class='nowrap'>דדליין</th></tr></thead><tbody>"; assigns.forEach(a=>{ state.assignMeta.set(a.id,{cmid:a.cmid,name:a.name}); html+=`<tr><td><button class="btn secondary assignBtn" data-assign-id="${a.id}" onclick="loadSubmissions(${a.id}, '${escapeHtml(a.name)}')">${escapeHtml(a.name)}</button></td><td class='nowrap'>${fmtDate(a.allowsubmissionsfromdate)}</td><td class='nowrap'>${fmtDate(a.duedate)}</td></tr>`; }); html+="</tbody></table>"; byId('assignList').innerHTML=html; }catch(e){ byId('assignList').innerHTML=`<div class="error">שגיאה בטעינת מטלות: ${escapeHtml(e.message)}</div>`; } }
-  function markSelectedAssignment(assignId){ document.querySelectorAll('.assignBtn').forEach(b=>b.classList.remove('selected')); const el=document.querySelector(`.assignBtn[data-assign-id='${assignId}']`); if(el) el.classList.add('selected'); }
-
-  // ======= RUBRIC / GUIDE DEFINITION (assignment-level) =======
-  async function loadRubricDefinition(assignId){ state.rubricDef=null; const meta=state.assignMeta.get(assignId); if(!meta?.cmid) return null; try{ const cm=await apiCall('core_course_get_course_module',{cmid:meta.cmid}); const contextid=cm?.cm?.contextid||cm?.contextid||cm?.coursemodule?.contextid; if(!contextid) return null; let defs=await apiCall('core_grading_get_definitions',{component:'mod_assign',area:'submissions',contextid}); if(!defs?.definitions?.length){ defs=await apiCall('core_grading_get_definitions',{component:'mod_assign',area:'submission',contextid}); } const def=(defs?.definitions||[]).find(d=>/rubric|guide/i.test(d?.method||''))||defs?.definitions?.[0]; if(!def) return null; const method=def.method; const criteria=[]; const criteriaMap=new Map(); if(method==='rubric' && def?.rubric?.criteria){ (def.rubric.criteria||[]).forEach(c=>{ const levels=(c.levels||[]).map(l=>({id:l.id,score:+l.score,definition:l.definition})); const max=Math.max(...levels.map(l=>l.score),0); const item={id:c.id,description:c.description||c.shortname||'',levels,maxscore:max}; criteria.push(item); criteriaMap.set(c.id,item); }); } else if(method==='guide' && def?.guide?.criteria){ (def.guide.criteria||[]).forEach(c=>{ const item={id:c.id,description:c.description||c.shortname||'',maxscore:+c.maxscore||0}; criteria.push(item); criteriaMap.set(c.id,item); }); } state.rubricDef={method,criteria,criteriaMap}; renderRubricHeader(); return state.rubricDef; }catch(e){ debugLog('RUBRIC_DEF_ERROR',{message:e.message}); return null; } }
-  function renderRubricHeader(){ const box=byId('assignRubricDef'); const def=state.rubricDef; if(!def||!def.criteria?.length){ box.classList.add('hidden'); box.innerHTML=''; return;} let html=`<h4>מחוון למטלה (שיטה: ${def.method==='rubric'?'Rubric':'Guide'})</h4>`; html+='<table><thead><tr><th>קריטריון</th><th class="nowrap">ניקוד מקסימלי</th></tr></thead><tbody>'; def.criteria.forEach(c=>{ html+=`<tr><td>${escapeHtml(c.description||'קריטריון')}</td><td class="nowrap">${c.maxscore??''}</td></tr>`; }); html+='</tbody></table>'; box.innerHTML=html; box.classList.remove('hidden'); }
-
-  // ======= SUBMISSIONS =======
-  async function loadSubmissions(assignId, assignName){ state.currentAssignId=assignId; state.currentAssignName=assignName||""; renderCrumbs(); markSelectedAssignment(assignId); byId('subsTitle').textContent='הגשות במטלה: '+(assignName||''); byId('subsArea').innerHTML="<div class='muted'>טוען הגשות וציונים…</div>"; byId('submissions').classList.remove('hidden'); byId('subsMsg').classList.add('hidden'); byId('subsErr').classList.add('hidden'); await loadRubricDefinition(assignId); try{ const [subsData,gradesData]=await Promise.all([ apiCall('mod_assign_get_submissions',{'assignmentids[0]':assignId}), apiCall('mod_assign_get_grades',{'assignmentids[0]':assignId}) ]); const submissions=(subsData.assignments && subsData.assignments[0])?subsData.assignments[0].submissions:[]; const grades=(gradesData.assignments && gradesData.assignments[0])?gradesData.assignments[0].grades:[]; const gradeMap=new Map(grades.map(g=>[g.userid,g])); const users=state.enrolledByCourse.get(state.selectedCourse.id)||[]; const userMap=new Map(users.map(u=>[u.id,u])); const userIds=submissions.map(s=>s.userid); const feedbackMap=await fetchFeedbackBatch(assignId,userIds);
-      let html="<table><thead><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב מילולי</th><th>עדכון</th></tr></thead><tbody>";
-      for(const s of submissions){ const g=gradeMap.get(s.userid); const gradeText=fmtGradeInt(g?.grade); const fbObj=feedbackMap.get(s.userid)||{text:'',rubricSel:{}}; const fbText=cleanHtml(fbObj.text); const u=userMap.get(s.userid); const name=u?.fullname||`${s.userid}`; const files=[]; (s.plugins||[]).forEach(p=>{ (p.fileareas||[]).forEach(fa=>{ (fa.files||[]).forEach(file=>{ const cands=fileUrlCandidates(file.fileurl||''); const main=cands[1]||cands[0]; const backup=cands[0]; files.push(`<a href="${main}" target="_blank" rel="noreferrer">${escapeHtml(file.filename||'קובץ')}</a>` + (backup&&backup!==main?` <a class="muted" href="${backup}" target="_blank" rel="noreferrer">(גיבוי)</a>`:'')); }); }); });
-        let rubricUI=''; if(state.rubricDef && state.rubricDef.criteria?.length){ const m=state.rubricDef.method; rubricUI+=`<div class="rubric"><button class="btn secondary" onclick="toggleRubric('rb_${s.userid}')">עריכת מחוון</button>`; rubricUI+=`<div id="rb_${s.userid}" class="hidden" style="margin-top:8px">`; rubricUI+='<table><thead><tr><th>קריטריון</th>'+(m==='rubric'?'<th>רמה</th>':'<th>ציון</th>')+'<th>הערה</th></tr></thead><tbody>'; state.rubricDef.criteria.forEach(c=>{ const sel=fbObj.rubricSel?.[c.id]||{}; if(m==='rubric'){ const opts=(c.levels||[]).map(l=>`<option value="${l.id}" ${sel.levelid==l.id?'selected':''}>${escapeHtml(l.definition||'רמה')} — ${l.score}</option>`).join(''); rubricUI+=`<tr><td>${escapeHtml(c.description||'')}</td><td><select id="rb_lvl_${s.userid}_${c.id}"><option value="">—</option>${opts}</select></td><td><input id="rb_rmk_${s.userid}_${c.id}" type="text" placeholder="הערה" value="${escapeHtml(sel.remark||'')}"></td></tr>`; } else { rubricUI+=`<tr><td>${escapeHtml(c.description||'')}</td><td><input id="gd_score_${s.userid}_${c.id}" type="number" step="0.01" min="0" max="${c.maxscore}" value="${sel.score??''}" placeholder="0-${c.maxscore}"></td><td><input id="gd_rmk_${s.userid}_${c.id}" type="text" placeholder="הערה" value="${escapeHtml(sel.remark||'')}"></td></tr>`; } }); rubricUI+='</tbody></table></div></div>'; }
-        html+=`<tr>
-            <td><div><strong>${escapeHtml(name)}</strong></div><div class="muted">ID: ${s.userid}${u?.email?" · "+escapeHtml(u.email):""}</div>${rubricUI}</td>
-            <td class="files">${files.join('<br/>') || "<span class='muted'>אין קבצים</span>"}</td>
-            <td class="nowrap">${gradeText}</td>
-            <td><textarea id="fb_${s.userid}" class="fb-input" rows="3" placeholder="משוב">${escapeHtml(fbText)}</textarea></td>
-            <td class="nowrap"><input type="number" step="0.01" id="g_${s.userid}" class="grade-input" placeholder="${gradeText==='–'?'ציון':''}"> <button class="btn secondary" onclick="updateGrade(${assignId}, ${s.userid})">שמור</button></td>
-          </tr>`;
-      }
-      html+='</tbody></table>'; byId('subsArea').innerHTML=html; }
-    catch(e){ const err=byId('subsErr'); err.textContent='שגיאה בטעינת הגשות/ציונים: '+e.message; err.classList.remove('hidden'); byId('subsArea').innerHTML=''; }
-  }
-  function toggleRubric(id){ const el=byId(id); if(!el) return; el.classList.toggle('hidden'); }
-
-  // === Feedback batch + rubric selections ===
-  async function fetchFeedbackBatch(assignId, userIds){ const map=new Map(); const limit=8; for(let i=0;i<userIds.length;i+=limit){ const slice=userIds.slice(i,i+limit); await Promise.all(slice.map(async uid=>{ try{ const st=await apiCall('mod_assign_get_submission_status',{assignid:assignId,userid:uid}); const fb=st?.feedback||{}; let text=''; const plugins=fb.plugins||[]; const pComments=plugins.find(p=>p.type==='comments'||/comments/i.test(p?.name||'')); if(pComments?.editorfields){ const ef=pComments.editorfields.find(e=>Object.prototype.hasOwnProperty.call(e,'text')); if(ef?.text!=null) text=ef.text; } const rubricSel={}; const pRubric=plugins.find(p=>/rubric|guide/i.test(p?.type||'')||/rubric|guide/i.test(p?.name||'')); if(pRubric){ const crits=pRubric.criteria||pRubric.criterion||[]; (Array.isArray(crits)?crits:Object.values(crits)).forEach(c=>{ const cid=c.id!=null?c.id:c.criterionid; if(cid==null) return; if(state.rubricDef?.method==='rubric'){ rubricSel[cid]={ levelid:c.levelid??c.chosen??c.selected, remark:c.remark||c.comment||'' }; } else if(state.rubricDef?.method==='guide'){ rubricSel[cid]={ score:c.score??c.value??null, remark:c.remark||c.comment||'' }; } }); }
-            map.set(uid,{text,rubricSel}); }catch(e){ map.set(uid,{text:''}); } })); } return map; }
-
-  // ======= UPDATE (grade + feedback + rubric/guide) =======
-  async function updateGrade(assignId, userId){ const inp=byId(`g_${userId}`); const fb=byId(`fb_${userId}`); const gradeVal=(inp?.value||'').trim(); const fbText=(fb?.value||'').trim(); try{ const params={ assignmentid:assignId, userid:userId, attemptnumber:-1, workflowstate:'graded', addattempt:0, applytoall:0, 'plugindata[assignfeedbackcomments_editor][text]':fbText, 'plugindata[assignfeedbackcomments_editor][format]':1, 'plugindata[assignfeedbackcomments_editor][itemid]':0 };
-      if(state.rubricDef && state.rubricDef.criteria?.length){ const method=state.rubricDef.method; params['advancedgradingdata[method]']=method; params['advancedgradingdata[activemethod]']=method; if(method==='rubric'){ state.rubricDef.criteria.forEach(c=>{ const lvl=(byId(`rb_lvl_${userId}_${c.id}`)||{}).value; const rmk=(byId(`rb_rmk_${userId}_${c.id}`)||{}).value||''; if(lvl){ params[`advancedgradingdata[rubric][criteria][${c.id}][levelid]`]=lvl; } if(rmk){ params[`advancedgradingdata[rubric][criteria][${c.id}][remark]`]=rmk; } }); } else { state.rubricDef.criteria.forEach(c=>{ const sc=(byId(`gd_score_${userId}_${c.id}`)||{}).value; const rmk=(byId(`gd_rmk_${userId}_${c.id}`)||{}).value||''; if(sc!==''&&sc!=null){ params[`advancedgradingdata[guide][criteria][${c.id}][score]`]=sc; } if(rmk){ params[`advancedgradingdata[guide][criteria][${c.id}][remark]`]=rmk; } }); } } else { if(gradeVal!=='') params.grade=gradeVal; }
-      debugLog('SAVE_GRADE_PARAMS', params); const resp=await apiCall('mod_assign_save_grade', params); debugLog('SAVE_GRADE_RESP', resp); byId('subsMsg').textContent='הציון/משוב עודכנו בהצלחה.'; byId('subsMsg').classList.remove('hidden'); loadSubmissions(assignId, state.currentAssignName); }
-    catch(e){ debugLog('SAVE_GRADE_ERROR',{message:e.message}); alert('עדכון נכשל: '+e.message+'\n(פתח מצב דיבוג כדי לראות פרטים)\nודא שלטוקן יש הרשאות עדכון ציונים/מחוון/משוב)'); } }
 </script>
 </body>
 </html>
