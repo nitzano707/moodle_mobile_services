@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --blue:#0b4d88; --blue-2:#0a3e6d; --light:#f4f6f9; --card:#ffffff; --muted:#6b7280; --line:#e5e7eb;
+      --pill:#eef2f7;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--light);color:#222;font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+    header{background:var(--blue);color:#fff;padding:22px 16px}
+    header .wrap{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{margin:0;font-size:clamp(18px,2.6vw,28px)}
+    .top-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .tabbtn{
+      appearance:none;border:1px solid transparent;background:#e8eef6;color:#0b2743;
+      padding:10px 16px;border-radius:999px;font-weight:700;cursor:pointer;transition:.15s;
+    }
+    .tabbtn:hover{filter:brightness(.96)}
+    .tabbtn.active{background:#fff;color:#0b2743;border-color:#d4dbe6;box-shadow:0 2px 0 rgba(0,0,0,.05)}
+    .danger{background:#ffe8e8;color:#7a0d0d;border-color:#ffd1d1}
+    .container{max-width:1200px;margin:auto;padding:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .section-title{margin:0 0 10px;font-size:18px}
+    .pillbar{display:flex;flex-wrap:wrap;gap:8px}
+    .pill{
+      border:1px solid #dbe3ed;background:var(--pill);padding:8px 12px;border-radius:999px;cursor:pointer;
+      font-weight:600
+    }
+    .pill:hover{background:#e6eef7}
+    .pill.small{font-size:12px;padding:6px 10px}
+    .hidden{display:none}
+    .login{max-width:680px;margin:30px auto}
+    .login input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+    .btn{appearance:none;border:1px solid #ccd6e4;background:#0d63b5;color:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700}
+    .btn:hover{background:#0b58a4}
+    .btn.secondary{background:#eef3f9;color:#0b2743;border-color:#d4dbe6}
+    .btn.secondary:hover{filter:brightness(.97)}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    thead th{background:#f2f5f9;text-align:right;padding:10px;border-bottom:1px solid var(--line);font-weight:800}
+    tbody td{padding:10px;border-top:1px solid var(--line);vertical-align:top}
+    .muted{color:var(--muted)}
+    .nowrap{white-space:nowrap}
+    .files a{display:inline-block;margin:0 0 6px 8px;text-decoration:underline}
+    .grid{display:grid;gap:16px}
+    @media(min-width:900px){ .grid-2{grid-template-columns:1fr 1fr} }
+    footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
+    .notice{padding:10px 12px;background:#fff7e6;border:1px solid #ffe1a6;border-radius:10px}
+    .error{padding:10px 12px;background:#ffecec;border:1px solid #ffc9c9;border-radius:10px;color:#7a0d0d}
+    .loader{font-size:14px;color:#0b2743}
+    .kicker{font-size:13px;color:#0b2743;margin:0 0 8px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
+      <div class="top-actions">
+        <button id="navHier" class="tabbtn active" onclick="showTab('hierarchy')">ממשק היררכי 📚</button>
+        <button id="navFuncs" class="tabbtn" onclick="showTab('functions')">פונקציות זמינות ⚙️</button>
+        <button class="tabbtn danger" onclick="deleteToken()">מחק Token 🗑️</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Login -->
+    <div id="loginScreen" class="card login">
+      <h2 class="section-title">התחברות עם Token</h2>
+      <p class="muted">ה-Token שלך נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
+      <input type="password" id="tokenInput" placeholder="הדבק כאן את ה-Token" />
+      <div style="margin-top:10px"><button class="btn" onclick="saveToken()">שמור והתחבר</button></div>
+    </div>
+
+    <!-- Main -->
+    <div id="mainScreen" class="hidden">
+      <!-- HIERARCHY -->
+      <div id="hierarchyTab" class="tab">
+        <div id="years" class="card">
+          <h3 class="section-title">שנות לימוד</h3>
+          <div id="yearsBar" class="pillbar"></div>
+          <div id="yearsEmpty" class="muted hidden">לא נמצאו שנים</div>
+        </div>
+
+        <div id="semesters" class="card hidden">
+          <h3 class="section-title">סמסטרים</h3>
+          <div id="semsBar" class="pillbar"></div>
+        </div>
+
+        <div id="courses" class="card hidden">
+          <h3 class="section-title">קורסים</h3>
+          <div id="coursesBar" class="pillbar"></div>
+        </div>
+
+        <div id="assignments" class="card hidden">
+          <h3 class="section-title">מטלות</h3>
+          <div id="assignList"></div>
+        </div>
+
+        <div id="submissions" class="card hidden">
+          <h3 class="section-title" id="subsTitle">הגשות</h3>
+          <div id="subsArea"></div>
+          <div id="subsNote" class="notice hidden" style="margin-top:10px"></div>
+          <div id="subsErr" class="error hidden" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- FUNCTIONS -->
+      <div id="functionsTab" class="tab hidden">
+        <div class="card">
+          <h3 class="section-title">כל הפונקציות הזמינות בטוקן</h3>
+          <div id="funcsBar" class="pillbar"></div>
+          <pre id="funcResult" class="card" style="white-space:pre-wrap;overflow:auto;max-height:420px"></pre>
+        </div>
+      </div>
+    </div>
+
+    <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
+  </div>
+
+<script>
+  // ======= CONFIG & STATE =======
+  const baseUrl = "https://moodle4.talpiot.ac.il";
+  let token = localStorage.getItem("moodleToken") || "";
+
+  const state = {
+    me: null,                 // site_info
+    courses: [],              // my courses
+    selectedYear: null,
+    selectedSem: null,
+    selectedCourse: null,     // object
+    enrolledByCourse: new Map(), // courseId -> [users]
+    currentAssignId: null,
+    currentAssignName: ""
+  };
+
+  // ======= BOOT =======
+  window.addEventListener("load", () => { if (token) init(); });
+
+  function saveToken(){
+    token = document.getElementById("tokenInput").value.trim();
+    if(!token){ alert("נא להזין Token"); return; }
+    localStorage.setItem("moodleToken", token);
+    init();
+  }
+  function deleteToken(){
+    localStorage.removeItem("moodleToken");
+    location.reload();
+  }
+  function showTab(which){
+    const tabs = { hierarchy: "hierarchyTab", functions: "functionsTab" };
+    for (const k in tabs) document.getElementById(tabs[k]).classList.toggle("hidden", k!==which);
+    document.getElementById("navHier").classList.toggle("active", which==="hierarchy");
+    document.getElementById("navFuncs").classList.toggle("active", which==="functions");
+  }
+
+  // ======= API =======
+  async function apiCall(wsfunction, params={}){
+    const q = new URLSearchParams({ wstoken: token, wsfunction, moodlewsrestformat: "json" });
+    for (const [k,v] of Object.entries(params)) q.append(k, v);
+    const url = `${baseUrl}/webservice/rest/server.php?${q.toString()}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && (data.exception || data.errorcode)) {
+      throw new Error(`${data.errorcode || data.exception}: ${data.message || "API error"}`);
+    }
+    return data;
+  }
+  const fmtDate = (ts) => ts ? new Date(ts*1000).toLocaleString() : "–";
+
+  // ======= YEAR / SEM DETECTION =======
+  function detectYearLabel(name){
+    if (!name) return "לא ידוע";
+    const heb = name.match(/תשפ.?[\"״׳']?[אבגדהוזחטיכלמנסעפצקרשת]?/); // כגון תשפ\"ד
+    if (heb) return heb[0].replace(/\"|״|׳|'/g,"");
+    const g = name.match(/20\d{2}/);
+    return g ? g[0] : "לא ידוע";
+  }
+  function detectSemesterLabel(name){
+    if(!name) return "לא מוגדר";
+    if (/סמסטר.?א/.test(name)) return "סמסטר א";
+    if (/סמסטר.?ב/.test(name)) return "סמסטר ב";
+    if (/קיץ|Summer/i.test(name)) return "סמסטר קיץ";
+    if (/Spring/i.test(name)) return "אביב";
+    if (/Fall|Autumn/i.test(name)) return "סתיו";
+    return "לא מוגדר";
+  }
+
+  // ======= INIT =======
+  async function init(){
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("mainScreen").classList.remove("hidden");
+    try{
+      // who am I
+      state.me = await apiCall("core_webservice_get_site_info");
+      // my courses
+      state.courses = await apiCall("core_enrol_get_users_courses", { userid: state.me.userid });
+
+      renderYears();
+      buildFunctionsTab();
+    }catch(e){
+      alert("שגיאת התחברות: " + e.message);
+      deleteToken();
+    }
+  }
+
+  // ======= FUNCTIONS TAB =======
+  async function buildFunctionsTab(){
+    const funcs = state.me.functions || [];
+    const bar = document.getElementById("funcsBar");
+    bar.innerHTML = "";
+    funcs.forEach(f=>{
+      const b = document.createElement("button");
+      b.className = "pill small";
+      b.textContent = f.name;
+      b.onclick = async ()=>{
+        document.getElementById("funcResult").textContent = "טוען...";
+        try{
+          const data = await apiCall(f.name);
+          document.getElementById("funcResult").textContent = JSON.stringify(data,null,2);
+        }catch(err){
+          document.getElementById("funcResult").textContent = "שגיאה: " + err.message;
+        }
+      };
+      bar.appendChild(b);
+    });
+  }
+
+  // ======= HIERARCHY FLOW =======
+  function renderYears(){
+    const yearsBar = document.getElementById("yearsBar");
+    const yearsEmpty = document.getElementById("yearsEmpty");
+    yearsBar.innerHTML = "";
+    const groups = new Map(); // year -> [courses]
+    state.courses.forEach(c=>{
+      const y = detectYearLabel(c.fullname || c.shortname || "");
+      if(!groups.has(y)) groups.set(y,[]);
+      groups.get(y).push(c);
+    });
+    const years = Array.from(groups.keys()).sort((a,b)=> String(b).localeCompare(String(a), 'he'));
+    if (years.length===0){ yearsEmpty.classList.remove("hidden"); return; }
+    yearsEmpty.classList.add("hidden");
+
+    years.forEach(y=>{
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = y;
+      btn.onclick = ()=> { state.selectedYear = y; renderSemesters(groups.get(y)); };
+      yearsBar.appendChild(btn);
+    });
+  }
+
+  function renderSemesters(courses){
+    // show block
+    document.getElementById("semesters").classList.remove("hidden");
+    document.getElementById("courses").classList.add("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+    document.getElementById("semsBar").innerHTML = "";
+
+    const semGroups = new Map(); // sem -> [courses]
+    courses.forEach(c=>{
+      const s = detectSemesterLabel(c.fullname || c.shortname || "");
+      if(!semGroups.has(s)) semGroups.set(s,[]);
+      semGroups.get(s).push(c);
+    });
+    Array.from(semGroups.keys()).forEach(s=>{
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = s;
+      btn.onclick = ()=> { state.selectedSem = s; renderCourses(semGroups.get(s)); };
+      document.getElementById("semsBar").appendChild(btn);
+    });
+  }
+
+  function renderCourses(courses){
+    const bar = document.getElementById("coursesBar");
+    bar.innerHTML = "";
+    document.getElementById("courses").classList.remove("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+
+    courses.forEach(c=>{
+      const btn = document.createElement("button");
+      btn.className = "pill";
+      btn.textContent = c.fullname || c.shortname || ("קורס " + c.id);
+      btn.onclick = ()=> openCourse(c);
+      bar.appendChild(btn);
+    });
+  }
+
+  async function openCourse(course){
+    state.selectedCourse = course;
+    document.getElementById("assignList").innerHTML = "<div class='loader'>טוען מטלות…</div>";
+    document.getElementById("assignments").classList.remove("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+
+    // cache enrolled users for names
+    if (!state.enrolledByCourse.has(course.id)){
+      try{
+        const users = await apiCall("core_enrol_get_enrolled_users", { courseid: course.id });
+        state.enrolledByCourse.set(course.id, users || []);
+      }catch(e){ state.enrolledByCourse.set(course.id, []); }
+    }
+
+    try{
+      const data = await apiCall("mod_assign_get_assignments", {"courseids[0]": course.id});
+      const assigns = (data.courses && data.courses[0]) ? data.courses[0].assignments : [];
+      if(assigns.length===0){
+        document.getElementById("assignList").innerHTML = "<div class='muted'>אין מטלות בקורס זה</div>";
+        return;
+      }
+      // table
+      let html = "<table><thead><tr><th>שם מטלה</th><th class='nowrap'>פתיחה</th><th class='nowrap'>דדליין</th></tr></thead><tbody>";
+      assigns.forEach(a=>{
+        html += `<tr>
+          <td><button class="btn secondary" onclick="loadSubmissions(${a.id}, '${escapeHtml(a.name)}')">${escapeHtml(a.name)}</button></td>
+          <td class="nowrap">${fmtDate(a.allowsubmissionsfromdate)}</td>
+          <td class="nowrap">${fmtDate(a.duedate)}</td>
+        </tr>`;
+      });
+      html += "</tbody></table>";
+      document.getElementById("assignList").innerHTML = html;
+    }catch(e){
+      document.getElementById("assignList").innerHTML = `<div class="error">שגיאה בטעינת מטלות: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  async function loadSubmissions(assignId, assignName){
+    state.currentAssignId = assignId;
+    state.currentAssignName = assignName || "";
+    document.getElementById("subsTitle").textContent = "הגשות במטלה: " + (assignName || "");
+    document.getElementById("subsArea").innerHTML = "<div class='loader'>טוען הגשות וציונים…</div>";
+    document.getElementById("submissions").classList.remove("hidden");
+    document.getElementById("subsNote").classList.add("hidden");
+    document.getElementById("subsErr").classList.add("hidden");
+
+    try{
+      const [subsData, gradesData] = await Promise.all([
+        apiCall("mod_assign_get_submissions", {"assignmentids[0]": assignId}),
+        apiCall("mod_assign_get_grades", {"assignmentids[0]": assignId})
+      ]);
+      const submissions = (subsData.assignments && subsData.assignments[0]) ? subsData.assignments[0].submissions : [];
+      const grades = (gradesData.assignments && gradesData.assignments[0]) ? gradesData.assignments[0].grades : [];
+
+      // maps
+      const gradeMap = new Map();
+      grades.forEach(g => gradeMap.set(g.userid, g));
+
+      const users = state.enrolledByCourse.get(state.selectedCourse.id) || [];
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      // build table
+      let html = "<table><thead><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב מילולי</th><th>עדכון ציון</th></tr></thead><tbody>";
+      submissions.forEach(s=>{
+        // files
+        const files = [];
+        (s.plugins||[]).forEach(p=>{
+          (p.fileareas||[]).forEach(fa=>{
+            (fa.files||[]).forEach(file=>{
+              const href = (file.fileurl || "") + "&token=" + encodeURIComponent(token);
+              files.push(`<a href="${href}" target="_blank" rel="noreferrer">${escapeHtml(file.filename || "קובץ")}</a>`);
+            });
+          });
+        });
+
+        // grade + feedback
+        const g = gradeMap.get(s.userid);
+        const gradeText = (g && g.grade != null) ? g.grade : "–";
+        // moodle מחזיר לעתים feedbacktext ולעתים gradefordisplay (שכולל HTML)
+        const feedbackHtml = g?.feedbacktext ? escapeHtml(g.feedbacktext) : (g?.gradefordisplay || "");
+        const u = userMap.get(s.userid);
+        const name = u?.fullname || `${s.userid}`;
+
+        html += `
+          <tr>
+            <td>
+              <div><strong>${escapeHtml(name)}</strong></div>
+              <div class="muted">ID: ${s.userid}</div>
+            </td>
+            <td class="files">${files.join("<br/>") || "<span class='muted'>אין קבצים</span>"}</td>
+            <td class="nowrap">${gradeText}</td>
+            <td>${feedbackHtml || "<span class='muted'>—</span>"}</td>
+            <td class="nowrap">
+              <input type="number" step="0.01" id="g_${s.userid}" style="width:85px;padding:6px;border:1px solid #d9dee6;border-radius:8px" placeholder="${gradeText==='–'?'ציון':''}">
+              <button class="btn secondary" onclick="updateGrade(${assignId}, ${s.userid})">שמור</button>
+            </td>
+          </tr>`;
+      });
+      html += "</tbody></table>";
+      document.getElementById("subsArea").innerHTML = html;
+
+      // note about permissions
+      document.getElementById("subsNote").textContent =
+        "עדכון ציון פועל רק אם לטוקן שלך יש הרשאות מתאימות (grading). אחרת תתקבל שגיאה מה-Moodle.";
+      document.getElementById("subsNote").classList.remove("hidden");
+
+    }catch(e){
+      const err = document.getElementById("subsErr");
+      err.textContent = "שגיאה בטעינת הגשות/ציונים: " + e.message;
+      err.classList.remove("hidden");
+      document.getElementById("subsArea").innerHTML = "";
+    }
+  }
+
+  // ======= UPDATE GRADE (best-effort; requires permissions) =======
+  async function updateGrade(assignId, userId){
+    const inp = document.getElementById(`g_${userId}`);
+    const val = (inp?.value || "").trim();
+    if (!val){ alert("נא להזין ציון"); return; }
+    try{
+      // ניסיון עדכון: פרמטרים נפוצים (ייתכן שב-Moodle מסוים יידרשו פרמטרים נוספים/אחרים)
+      await apiCall("mod_assign_save_grade", {
+        assignmentid: assignId,
+        userid: userId,
+        grade: val,
+        attemptnumber: -1 // ניסיון עדכני
+      });
+      alert("ניסיון עדכון בוצע. מרענן את הטבלה…");
+      loadSubmissions(assignId, state.currentAssignName);
+    }catch(e){
+      alert("עדכון ציון נכשל: " + e.message + "\n(ייתכן שחסרות הרשאות לטוקן או שנדרשים פרמטרים נוספים בשרת)");
+    }
+  }
+
+  // ======= helpers =======
+  function escapeHtml(s){
+    return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  }
+</script>
+</body>
+</html>
