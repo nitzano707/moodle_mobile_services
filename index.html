@@ -11,9 +11,7 @@
     header .wrap{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
     h1{margin:0;font-size:22px}
     .top-actions{display:flex;gap:10px;flex-wrap:wrap}
-    .tabbtn{border:1px solid #d4dbe6;background:#e8eef6;color:#0b2743;padding:10px 16px;border-radius:999px;font-weight:700;cursor:pointer}
-    .tabbtn.active{background:#fff}
-    .danger{background:#ffe8e8;color:#7a0d0d;border-color:#ffd1d1}
+    .danger{background:#ffe8e8;color:#7a0d0d;border:1px solid #ffd1d1;padding:8px 14px;border-radius:999px;cursor:pointer;font-weight:700}
     .container{max-width:1200px;margin:auto;padding:18px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
     .pillbar{display:flex;flex-wrap:wrap;gap:10px}
@@ -40,9 +38,7 @@
     <div class="wrap">
       <h1>מכללת תלפיות - שליפת מידע מהמוודל</h1>
       <div class="top-actions">
-        <button id="navHier" class="tabbtn active" onclick="showTab('hierarchy')">ממשק היררכי 📚</button>
-        <button id="navFuncs" class="tabbtn" onclick="showTab('functions')">פונקציות זמינות ⚙️</button>
-        <button class="tabbtn danger" onclick="deleteToken()">מחק Token 🗑️</button>
+        <button class="danger" onclick="deleteToken()">מחק Token 🗑️</button>
       </div>
     </div>
   </header>
@@ -92,14 +88,6 @@
           <div id="subsErr" class="error hidden"></div>
         </div>
       </div>
-
-      <div id="functionsTab" class="hidden">
-        <div class="card">
-          <h3>כל הפונקציות בטוקן</h3>
-          <div id="funcsBar" class="pillbar"></div>
-          <pre id="funcResult" style="white-space:pre-wrap;overflow:auto;max-height:400px"></pre>
-        </div>
-      </div>
     </div>
 
     <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
@@ -114,7 +102,6 @@ window.onload=()=>{if(token)init();};
 
 function saveToken(){token=document.getElementById("tokenInput").value.trim();if(!token)return;localStorage.setItem("moodleToken",token);init();}
 function deleteToken(){localStorage.removeItem("moodleToken");location.reload();}
-function showTab(t){document.getElementById("hierarchyTab").classList.toggle("hidden",t!=="hierarchy");document.getElementById("functionsTab").classList.toggle("hidden",t!=="functions");}
 
 async function apiCall(wsfunction,params={}){const q=new URLSearchParams({wstoken:token,wsfunction,moodlewsrestformat:"json"});for(const[k,v]of Object.entries(params))q.append(k,v);const res=await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);const d=await res.json();if(d.exception||d.errorcode)throw new Error(d.message);return d;}
 const fmtDate=ts=>ts?new Date(ts*1000).toLocaleString():"–";
@@ -125,9 +112,8 @@ async function init(){
   document.getElementById("mainScreen").classList.remove("hidden");
   state.me=await apiCall("core_webservice_get_site_info");
   state.courses=await apiCall("core_enrol_get_users_courses",{userid:state.me.userid});
-  renderYears();buildFunctions();
+  renderYears();
 }
-function buildFunctions(){const funcs=state.me.functions||[];const bar=document.getElementById("funcsBar");bar.innerHTML="";funcs.forEach(f=>{const b=document.createElement("button");b.className="pill";b.textContent=f.name;b.onclick=async()=>{document.getElementById("funcResult").textContent="טוען...";try{const d=await apiCall(f.name);document.getElementById("funcResult").textContent=JSON.stringify(d,null,2);}catch(e){document.getElementById("funcResult").textContent="שגיאה: "+e.message;}};bar.appendChild(b);});}
 
 function detectYearLabel(n){const m=n.match(/תשפ.?/);if(m)return m[0];const g=n.match(/20\d{2}/);return g?g[0]:"לא ידוע";}
 function detectSemesterLabel(n){if(/סמסטר.?א/.test(n))return"סמסטר א";if(/סמסטר.?ב/.test(n))return"סמסטר ב";if(/סמסטר.?ק/.test(n)||/קיץ/.test(n))return"סמסטר ק";if(/סמסטר.?ש/.test(n)||/שנתי/.test(n))return"סמסטר ש";return"לא מוגדר";}
@@ -179,10 +165,12 @@ async function loadSubs(aid,name){
 
 async function getFeedback(aid,uid){
   try{
-    const st=await apiCall("mod_assign_get_submission_status",{assignmentid:aid,userid:uid});
-    const plugins=st.feedback?.plugins||[];
+    const st=await apiCall("mod_assign_get_submission_status",{assignid:aid,userid:uid});
+    const plugins=st?.feedback?.plugins||[];
     for(const p of plugins){
-      if(p.type==="comments"&&p.editorfields){return p.editorfields[0]?.text||"";}
+      if(p.type==="comments"&&p.editorfields){
+        return p.editorfields[0]?.text||"";
+      }
     }
     return "";
   }catch{return "";}
