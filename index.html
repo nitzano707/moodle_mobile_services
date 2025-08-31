@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>מכללת תלפיות - שליפת מידע מהמוודל</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{margin:0;background:#f5f7fb;font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#1f2937;direction:rtl}
+    header{background:#0b4d88;color:#fff;padding:20px}
+    h1{margin:0;font-size:22px}
+    .container{max-width:1200px;margin:auto;padding:20px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:10px;padding:15px;margin-bottom:15px}
+    .pill{border:1px solid #ccc;background:#eef2f7;padding:7px 12px;border-radius:999px;cursor:pointer;margin:3px;font-weight:600}
+    .pill.selected{background:#0d63b5;color:#fff}
+    table{width:100%;border-collapse:collapse;background:#fff;margin-top:10px}
+    th,td{border:1px solid #ddd;padding:8px;text-align:right}
+    th{background:#f0f4f8}
+    .btn{background:#0d63b5;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer}
+    .btn:hover{background:#094b88}
+    .grade-input{width:70px}
+    .fb-input{width:100%;min-width:200px}
+    .ok{background:#e9f9f2;border:1px solid #c7f0df;padding:10px;border-radius:8px;color:#0a7f48;margin-top:10px}
+    .error{background:#ffecec;border:1px solid #ffc9c9;padding:10px;border-radius:8px;color:#7a0d0d;margin-top:10px}
+    footer{text-align:center;color:#555;padding:15px;border-top:1px solid #ddd;margin-top:20px}
+  </style>
+</head>
+<body>
+  <header><h1>מכללת תלפיות - שליפת מידע מהמוודל</h1></header>
+  <div class="container">
+
+    <div id="loginScreen" class="card">
+      <h2>התחברות</h2>
+      <p>הדבק כאן את ה-Token שלך:</p>
+      <input type="password" id="tokenInput" placeholder="Token" style="width:60%">
+      <button class="btn" onclick="saveToken()">שמור</button>
+    </div>
+
+    <div id="mainScreen" class="hidden">
+      <div id="courses" class="card">
+        <h2>הקורסים שלי</h2>
+        <div id="coursesBar"></div>
+      </div>
+      <div id="assignments" class="card hidden">
+        <h2>מטלות בקורס</h2>
+        <div id="assignList"></div>
+      </div>
+      <div id="submissions" class="card hidden">
+        <h2 id="subsTitle">הגשות</h2>
+        <div id="subsArea"></div>
+        <div id="subsMsg" class="ok hidden"></div>
+        <div id="subsErr" class="error hidden"></div>
+      </div>
+    </div>
+
+    <footer>פותח ע"י ד"ר ניצן אליקים | סביבת Vibe Coding</footer>
+  </div>
+
+<script>
+const baseUrl="https://moodle4.talpiot.ac.il";
+let token=localStorage.getItem("moodleToken")||"";
+
+window.onload=()=>{if(token)init();};
+
+function saveToken(){
+  token=document.getElementById("tokenInput").value.trim();
+  if(!token){alert("נא להזין Token");return;}
+  localStorage.setItem("moodleToken",token);init();
+}
+
+async function apiCall(wsfunction,params={}){
+  const q=new URLSearchParams({wstoken:token,wsfunction,moodlewsrestformat:"json"});
+  for(const[k,v]of Object.entries(params))q.append(k,v);
+  const res=await fetch(`${baseUrl}/webservice/rest/server.php?${q}`);
+  const data=await res.json();
+  if(data.exception||data.errorcode)throw new Error(data.message);
+  return data;
+}
+
+async function init(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("mainScreen").classList.remove("hidden");
+  const me=await apiCall("core_webservice_get_site_info");
+  const courses=await apiCall("core_enrol_get_users_courses",{userid:me.userid});
+  const bar=document.getElementById("coursesBar");
+  bar.innerHTML="";
+  courses.forEach(c=>{
+    const b=document.createElement("button");
+    b.className="pill";
+    b.textContent=c.fullname;
+    b.onclick=()=>openCourse(c);
+    bar.appendChild(b);
+  });
+}
+
+async function openCourse(c){
+  document.getElementById("assignments").classList.remove("hidden");
+  document.getElementById("assignList").innerHTML="טוען...";
+  const data=await apiCall("mod_assign_get_assignments",{"courseids[0]":c.id});
+  const assigns=(data.courses&&data.courses[0])?data.courses[0].assignments:[];
+  let html="<table><tr><th>מטלה</th><th>פתיחה</th><th>דדליין</th></tr>";
+  assigns.forEach(a=>{
+    html+=`<tr>
+      <td><button class="btn" onclick="loadSubmissions(${a.id},'${a.name.replace(/'/g,"")}')">${a.name}</button></td>
+      <td>${fmtDate(a.allowsubmissionsfromdate)}</td>
+      <td>${fmtDate(a.duedate)}</td>
+    </tr>`;
+  });
+  html+="</table>";
+  document.getElementById("assignList").innerHTML=html;
+}
+
+function fmtDate(ts){return ts?new Date(ts*1000).toLocaleString():"–";}
+function noDec(v){return (v==null||v==="")?"–":parseInt(v);}
+
+async function loadSubmissions(assignId,assignName){
+  document.getElementById("submissions").classList.remove("hidden");
+  document.getElementById("subsTitle").textContent="הגשות במטלה: "+assignName;
+  document.getElementById("subsArea").innerHTML="טוען...";
+  try{
+    const [subsData,gradesData]=await Promise.all([
+      apiCall("mod_assign_get_submissions",{"assignmentids[0]":assignId}),
+      apiCall("mod_assign_get_grades",{"assignmentids[0]":assignId})
+    ]);
+    const subs=(subsData.assignments&&subsData.assignments[0])?subsData.assignments[0].submissions:[];
+    const grades=(gradesData.assignments&&gradesData.assignments[0])?gradesData.assignments[0].grades:[];
+    const gradeMap=new Map();grades.forEach(g=>gradeMap.set(g.userid,g));
+    let html="<table><tr><th>סטודנט</th><th>קבצים</th><th>ציון</th><th>משוב מילולי</th><th>עדכון</th></tr>";
+    subs.forEach(s=>{
+      const g=gradeMap.get(s.userid)||{};
+      const grade=noDec(g.grade);
+      const fb=g.feedbacktext||"";
+      let files=[];
+      (s.plugins||[]).forEach(p=>(p.fileareas||[]).forEach(fa=>(fa.files||[]).forEach(f=>{
+        const url=f.fileurl.includes("token=")?f.fileurl:f.fileurl+"?token="+token;
+        files.push(`<a href="${url}" target="_blank">${f.filename}</a>`);
+      })));
+      html+=`<tr>
+        <td>${s.userid}</td>
+        <td>${files.join("<br>")||"—"}</td>
+        <td>${grade}</td>
+        <td>
+          <textarea id="fb_${s.userid}" class="fb-input" rows="2" placeholder="משוב">${fb}</textarea>
+        </td>
+        <td>
+          <input type="number" id="g_${s.userid}" class="grade-input" placeholder="${grade}"/>
+          <button class="btn" onclick="updateGrade(${assignId},${s.userid})">שמור</button>
+        </td>
+      </tr>`;
+    });
+    html+="</table>";
+    document.getElementById("subsArea").innerHTML=html;
+  }catch(e){
+    document.getElementById("subsErr").textContent=e.message;
+    document.getElementById("subsErr").classList.remove("hidden");
+  }
+}
+
+async function updateGrade(assignId,userId){
+  const grade=document.getElementById(`g_${userId}`).value;
+  const fb=document.getElementById(`fb_${userId}`).value;
+  try{
+    await apiCall("mod_assign_save_grade",{
+      assignmentid:assignId,
+      userid:userId,
+      grade:grade,
+      attemptnumber:-1,
+      addattempt:0,
+      workflowstate:"graded",
+      applytoall:0,
+      "plugindata[assignfeedbackcomments_editor][text]":fb,
+      "plugindata[assignfeedbackcomments_editor][format]":1
+    });
+    document.getElementById("subsMsg").textContent="עודכן בהצלחה.";
+    document.getElementById("subsMsg").classList.remove("hidden");
+    loadSubmissions(assignId,"");
+  }catch(e){alert("שגיאה בעדכון: "+e.message);}
+}
+</script>
+</body>
+</html>
