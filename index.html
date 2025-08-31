@@ -305,66 +305,88 @@ async function getFeedback(aid,uid){
 
 async function getAssignmentDetails(assignmentId) {
   try {
-    // נשתמש ב-API שאנחנו כבר יודעים שעובד
+    // קבלת פרטי המטלה
     const assignData = await apiCall("mod_assign_get_assignments", {"courseids[0]": state.selectedCourse.id});
     const assignment = assignData.courses?.[0]?.assignments?.find(a => a.id == assignmentId);
     
     if (!assignment) return { intro: "", rubric: [] };
 
-    // נסה למצוא מידע על מחוון מתוך הגדרות המטלה
+    console.log("Assignment details:", assignment);
+
+    // בדיקה אם המטלה משתמשת בשיטת ציון מתקדמת (מחוון/guide)
     let rubricData = [];
     
-    // בדוק אם יש גדרת grading method
-    if (assignment.grade && assignment.grade !== 100) {
-      // זה עשוי להיות מטלה עם מחוון
+    // בדוק אם יש הגדרה של advanced grading או marking guide
+    if (assignment.advancedgrading || assignment.markingguide || 
+        (assignment.configs && assignment.configs.some(c => c.plugin === 'rubric' || c.plugin === 'guide')) ||
+        (assignment.grade && assignment.grade > 100)) { // ציון גבוה מ-100 עשוי להצביע על מחוון
+      
+      console.log("Found potential advanced grading setup");
+      
+      // נסה למצוא מידע על המחוון ממטלה עם ציון קיים
       try {
-        // ננסה לקבל מידע על כל הציונים כדי לזהות מבנה מחוון
         const grades = await apiCall("mod_assign_get_grades", {"assignmentids[0]": assignmentId});
-        const firstGrade = grades.assignments?.[0]?.grades?.[0];
+        const gradesWithFeedback = (grades.assignments?.[0]?.grades || []).filter(g => g.gradeddate);
         
-        if (firstGrade && firstGrade.gradeddate) {
-          // אם יש ציון, ננסה לקבל את מבנה המחוון מהסטטוס
+        for (const grade of gradesWithFeedback.slice(0, 2)) {
           const status = await apiCall("mod_assign_get_submission_status", {
             assignid: assignmentId,
-            userid: firstGrade.userid
+            userid: grade.userid
           });
           
           const plugins = status?.feedback?.plugins || [];
-          plugins.forEach(plugin => {
-            console.log("Analyzing plugin for rubric structure:", plugin.type, plugin);
-            if (plugin.criterias || plugin.criteria) {
-              const criteria = plugin.criterias || plugin.criteria;
-              if (Array.isArray(criteria)) {
-                criteria.forEach(criterion => {
-                  rubricData.push({
-                    id: criterion.id || criterion.criterionid || rubricData.length,
-                    shortname: criterion.shortname || criterion.description || `קריטריון ${rubricData.length + 1}`,
-                    description: criterion.description || criterion.shortname || '',
-                    maxscore: criterion.maxscore || criterion.score || '?'
+          console.log(`Plugins for graded user ${grade.userid}:`, plugins.map(p => p.type));
+          
+          for (const plugin of plugins) {
+            // חפש פלאגין של מחוון או guide
+            if (plugin.type && (plugin.type.includes('rubric') || plugin.type.includes('guide') || 
+                                plugin.type.includes('gradingform') || plugin.type === 'grading')) {
+              
+              console.log(`Found grading plugin: ${plugin.type}`, plugin);
+              
+              if (plugin.criterias || plugin.criteria) {
+                const criteria = plugin.criterias || plugin.criteria;
+                console.log("Criteria found:", criteria);
+                
+                if (Array.isArray(criteria)) {
+                  criteria.forEach((criterion, index) => {
+                    rubricData.push({
+                      id: criterion.id || criterion.criterionid || index,
+                      shortname: criterion.shortname || criterion.description || `קריטריון ${index + 1}`,
+                      description: criterion.description || "",
+                      maxscore: criterion.maxscore || criterion.levels?.reduce((max, level) => Math.max(max, level.score || 0), 0) || '?'
+                    });
                   });
-                });
-              } else if (typeof criteria === 'object') {
-                Object.entries(criteria).forEach(([key, criterion]) => {
-                  rubricData.push({
-                    id: key,
-                    shortname: criterion.shortname || criterion.description || `קריטריון ${rubricData.length + 1}`,
-                    description: criterion.description || criterion.shortname || '',
-                    maxscore: criterion.maxscore || criterion.score || '?'
+                } else if (typeof criteria === 'object') {
+                  Object.entries(criteria).forEach(([key, criterion]) => {
+                    rubricData.push({
+                      id: key,
+                      shortname: criterion.shortname || criterion.description || `קריטריון ${rubricData.length + 1}`,
+                      description: criterion.description || "",
+                      maxscore: criterion.maxscore || '?'
+                    });
                   });
-                });
+                }
+                
+                if (rubricData.length > 0) break;
               }
             }
-          });
+          }
+          
+          if (rubricData.length > 0) break;
         }
       } catch (e) {
-        console.log("Could not detect rubric structure:", e);
+        console.log("Error detecting rubric from graded submissions:", e);
       }
     }
+    
+    console.log("Final detected rubric criteria:", rubricData);
 
     return {
       intro: assignment.intro || assignment.description || "",
       rubric: rubricData
     };
+    
   } catch (e) {
     console.error("Error getting assignment details:", e);
     return { intro: "", rubric: [] };
@@ -437,6 +459,19 @@ async function updateGrade(aid, uid) {
   try {
     console.log(`Updating grade for user ${uid}, grade: ${grade}`);
     
+    // איסוף כל המשוב של הקריטריונים
+    const rubricFeedbacks = {};
+    const rubricInputs = document.querySelectorAll(`[id^="rubric_${uid}_"]`);
+    
+    rubricInputs.forEach(input => {
+      const match = input.id.match(/^rubric_\d+_(.+)$/);
+      if (match) {
+        const criterionId = match[1];
+        rubricFeedbacks[criterionId] = input.value.trim();
+        console.log(`Found rubric feedback for criterion ${criterionId}:`, input.value.trim());
+      }
+    });
+
     // משתמש בפרמטרים הנכונים כמו בקוד העובד
     const params = {
       assignmentid: aid,
@@ -453,6 +488,31 @@ async function updateGrade(aid, uid) {
     if (grade !== "") {
       params.grade = grade;
     }
+
+    // הוסף משוב קריטריונים אם יש
+    if (Object.keys(rubricFeedbacks).length > 0) {
+      // ננסה פורמטים שונים למשוב מחוון
+      let rubricIndex = 0;
+      Object.entries(rubricFeedbacks).forEach(([criterionId, feedback]) => {
+        if (feedback) {
+          // פורמט 1: rubric grading
+          params[`advancedgradingdata[criteria][${criterionId}][remark]`] = feedback;
+          
+          // פורמט 2: guide grading  
+          params[`advancedgradingdata[guide][criteria][${criterionId}][remark]`] = feedback;
+          
+          // פורמט 3: גישה אחרת
+          params[`plugindata[gradingform_rubric][criterion_${criterionId}_remark]`] = feedback;
+          
+          // פורמט 4: עוד גישה
+          params[`gradingform_rubric_instance_criterion_${criterionId}_remark`] = feedback;
+          
+          rubricIndex++;
+        }
+      });
+      
+      console.log("Added rubric feedback params:", Object.keys(params).filter(k => k.includes('criteria') || k.includes('rubric')));
+    }
     
     console.log("API params:", params);
     
@@ -460,17 +520,17 @@ async function updateGrade(aid, uid) {
     const result = await apiCall("mod_assign_save_grade", params);
     console.log("Save grade result:", result);
     
-    document.getElementById("subsMsg").textContent = "הציון/משוב עודכנו בהצלחה!";
+    document.getElementById("subsMsg").textContent = "הציון והמשוב עודכנו בהצלחה (כולל קריטריוני מחוון)!";
     document.getElementById("subsMsg").classList.remove("hidden");
     
-    // מרענן את הטבלה אחרי 1 שנייה
+    // מרענן את הטבלה אחרי 1.5 שנייה
     setTimeout(() => {
       loadSubs(aid, state.assignName);
-    }, 1000);
+    }, 1500);
     
   } catch (e) {
     console.error("Error updating grade:", e);
-    document.getElementById("subsErr").textContent = "עדכון נכשל: " + e.message + "\n(ייתכן שהטוקן חסר הרשאות או שהשרת דורש פרמטרים נוספים)";
+    document.getElementById("subsErr").textContent = "עדכון נכשל: " + e.message + "\n(הציון הכללי והמשוב הכללי אמורים להישמר, אבל ייתכן שמשוב הקריטריונים לא נשמר)";
     document.getElementById("subsErr").classList.remove("hidden");
   }
 }
