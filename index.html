@@ -6,52 +6,76 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
-      --blue:#0b4d88; --blue-2:#0a3e6d; --light:#f4f6f9; --card:#ffffff; --muted:#6b7280; --line:#e5e7eb;
-      --pill:#eef2f7;
+      --blue:#0b4d88; --blue-2:#0a3e6d; --light:#f5f7fb; --card:#ffffff; --muted:#6b7280; --line:#e5e7eb;
+      --pill:#eef2f7; --accent:#0d63b5; --accent-2:#0b58a4; --danger:#b30021; --ok:#0a7f48;
     }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--light);color:#222;font-family:"Segoe UI",Tahoma,Arial,sans-serif}
+    body{margin:0;background:var(--light);color:#1f2937;font-family:"Segoe UI","Rubik",Tahoma,Arial,sans-serif}
+    /* Header */
     header{background:var(--blue);color:#fff;padding:22px 16px}
     header .wrap{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
-    h1{margin:0;font-size:clamp(18px,2.6vw,28px)}
+    h1{margin:0;font-size:clamp(18px,2.6vw,28px);letter-spacing:.2px}
     .top-actions{display:flex;gap:10px;flex-wrap:wrap}
     .tabbtn{
-      appearance:none;border:1px solid transparent;background:#e8eef6;color:#0b2743;
+      appearance:none;border:1px solid #d4dbe6;background:#e8eef6;color:#0b2743;
       padding:10px 16px;border-radius:999px;font-weight:700;cursor:pointer;transition:.15s;
     }
     .tabbtn:hover{filter:brightness(.96)}
     .tabbtn.active{background:#fff;color:#0b2743;border-color:#d4dbe6;box-shadow:0 2px 0 rgba(0,0,0,.05)}
     .danger{background:#ffe8e8;color:#7a0d0d;border-color:#ffd1d1}
+    /* Layout */
     .container{max-width:1200px;margin:auto;padding:18px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
-    .section-title{margin:0 0 10px;font-size:18px}
-    .pillbar{display:flex;flex-wrap:wrap;gap:8px}
+    .section-title{margin:0 0 10px;font-size:19px}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+    /* Login */
+    .login{max-width:680px;margin:30px auto}
+    .login input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+    .btn{
+      appearance:none;border:1px solid #ccd6e4;background:var(--accent);color:#fff;border-radius:12px;padding:10px 14px;
+      cursor:pointer;font-weight:700
+    }
+    .btn:hover{background:var(--accent-2)}
+    .btn.secondary{background:#eef3f9;color:#0b2743;border-color:#d4dbe6}
+    .btn.secondary:hover{filter:brightness(.97)}
+    .btn.link{background:transparent;color:var(--accent);border:0;text-decoration:underline}
+    /* Pills + selections */
+    .pillbar{display:flex;flex-wrap:wrap;gap:10px}
     .pill{
-      border:1px solid #dbe3ed;background:var(--pill);padding:8px 12px;border-radius:999px;cursor:pointer;
+      border:1px solid #dbe3ed;background:var(--pill);padding:9px 13px;border-radius:999px;cursor:pointer;
       font-weight:600
     }
     .pill:hover{background:#e6eef7}
+    .pill.selected{background:var(--accent);color:#fff;border-color:#0a4c8a}
     .pill.small{font-size:12px;padding:6px 10px}
-    .hidden{display:none}
-    .login{max-width:680px;margin:30px auto}
-    .login input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
-    .btn{appearance:none;border:1px solid #ccd6e4;background:#0d63b5;color:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700}
-    .btn:hover{background:#0b58a4}
-    .btn.secondary{background:#eef3f9;color:#0b2743;border-color:#d4dbe6}
-    .btn.secondary:hover{filter:brightness(.97)}
+    /* Dropdown-like group (for look & feel קרוב למוודל) */
+    .dropdown{position:relative;display:inline-block}
+    .dropdown > button{min-width:150px; text-align:right}
+    .dropdown-menu{
+      position:absolute; z-index:5; background:#fff; border:1px solid var(--line); border-radius:10px;
+      box-shadow:0 8px 24px rgba(0,0,0,.08); padding:8px; margin-top:6px; min-width:220px;
+    }
+    .dropdown-menu button{display:block;width:100%;text-align:right;background:#fff;border:0;border-radius:8px;padding:8px 10px}
+    .dropdown-menu button:hover{background:#f3f6fb}
+    /* Breadcrumb */
+    .crumbs{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .crumb{background:#f1f5fb;border:1px solid #dbe3ed;border-radius:999px;padding:6px 10px}
+    /* Tables */
     table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
     thead th{background:#f2f5f9;text-align:right;padding:10px;border-bottom:1px solid var(--line);font-weight:800}
     tbody td{padding:10px;border-top:1px solid var(--line);vertical-align:top}
-    .muted{color:var(--muted)}
+    tbody tr:nth-child(even){background:#fcfdff}
     .nowrap{white-space:nowrap}
     .files a{display:inline-block;margin:0 0 6px 8px;text-decoration:underline}
-    .grid{display:grid;gap:16px}
-    @media(min-width:900px){ .grid-2{grid-template-columns:1fr 1fr} }
-    footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
+    .loader{font-size:14px;color:#0b2743}
     .notice{padding:10px 12px;background:#fff7e6;border:1px solid #ffe1a6;border-radius:10px}
     .error{padding:10px 12px;background:#ffecec;border:1px solid #ffc9c9;border-radius:10px;color:#7a0d0d}
-    .loader{font-size:14px;color:#0b2743}
-    .kicker{font-size:13px;color:#0b2743;margin:0 0 8px}
+    .ok{padding:10px 12px;background:#e9f9f2;border:1px solid #c7f0df;border-radius:10px;color:var(--ok)}
+    /* Inputs in table */
+    .grade-input{width:90px;padding:6px;border:1px solid #d9dee6;border-radius:8px}
+    /* Footer */
+    footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
   </style>
 </head>
 <body>
@@ -71,13 +95,25 @@
     <!-- Login -->
     <div id="loginScreen" class="card login">
       <h2 class="section-title">התחברות עם Token</h2>
-      <p class="muted">ה-Token שלך נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
+      <p class="muted">ה-Token נשמר מקומית בדפדפן (localStorage). השדה מוסתר לצורך פרטיות.</p>
       <input type="password" id="tokenInput" placeholder="הדבק כאן את ה-Token" />
       <div style="margin-top:10px"><button class="btn" onclick="saveToken()">שמור והתחבר</button></div>
     </div>
 
     <!-- Main -->
     <div id="mainScreen" class="hidden">
+
+      <!-- Breadcrumb selections -->
+      <div id="crumbsBox" class="card hidden">
+        <div class="crumbs">
+          <div id="crumbYear" class="crumb hidden"></div>
+          <div id="crumbSem" class="crumb hidden"></div>
+          <div id="crumbCourse" class="crumb hidden"></div>
+          <div id="crumbAssign" class="crumb hidden"></div>
+          <button class="btn link" onclick="resetSelections()">נקה בחירות</button>
+        </div>
+      </div>
+
       <!-- HIERARCHY -->
       <div id="hierarchyTab" class="tab">
         <div id="years" class="card">
@@ -104,6 +140,7 @@
         <div id="submissions" class="card hidden">
           <h3 class="section-title" id="subsTitle">הגשות</h3>
           <div id="subsArea"></div>
+          <div id="subsMsg" class="ok hidden" style="margin-top:10px"></div>
           <div id="subsNote" class="notice hidden" style="margin-top:10px"></div>
           <div id="subsErr" class="error hidden" style="margin-top:10px"></div>
         </div>
@@ -124,7 +161,7 @@
 
 <script>
   // ======= CONFIG & STATE =======
-  const baseUrl = "https://moodle4.talpiot.ac.il";
+  const baseUrl = "https://moodle4.talpiot.ac.il"; // המוודל שלך
   let token = localStorage.getItem("moodleToken") || "";
 
   const state = {
@@ -175,7 +212,7 @@
   // ======= YEAR / SEM DETECTION =======
   function detectYearLabel(name){
     if (!name) return "לא ידוע";
-    const heb = name.match(/תשפ.?[\"״׳']?[אבגדהוזחטיכלמנסעפצקרשת]?/); // כגון תשפ\"ד
+    const heb = name.match(/תשפ.?[\"״׳']?[אבגדהוזחטיכלמנסעפצקרשת]?/); // כגון תשפ"ד / תשפ״ה
     if (heb) return heb[0].replace(/\"|״|׳|'/g,"");
     const g = name.match(/20\d{2}/);
     return g ? g[0] : "לא ידוע";
@@ -184,9 +221,8 @@
     if(!name) return "לא מוגדר";
     if (/סמסטר.?א/.test(name)) return "סמסטר א";
     if (/סמסטר.?ב/.test(name)) return "סמסטר ב";
-    if (/קיץ|Summer/i.test(name)) return "סמסטר קיץ";
-    if (/Spring/i.test(name)) return "אביב";
-    if (/Fall|Autumn/i.test(name)) return "סתיו";
+    if (/סמסטר.?ק/.test(name) || /קיץ/.test(name)) return "סמסטר ק";
+    if (/סמסטר.?ש/.test(name) || /שנתי/.test(name)) return "סמסטר ש";
     return "לא מוגדר";
   }
 
@@ -194,6 +230,9 @@
   async function init(){
     document.getElementById("loginScreen").classList.add("hidden");
     document.getElementById("mainScreen").classList.remove("hidden");
+    showTab("hierarchy");
+    resetSelections(true);
+
     try{
       // who am I
       state.me = await apiCall("core_webservice_get_site_info");
@@ -213,6 +252,7 @@
     const funcs = state.me.functions || [];
     const bar = document.getElementById("funcsBar");
     bar.innerHTML = "";
+    document.getElementById("funcResult").textContent = "";
     funcs.forEach(f=>{
       const b = document.createElement("button");
       b.className = "pill small";
@@ -231,6 +271,43 @@
   }
 
   // ======= HIERARCHY FLOW =======
+  function resetSelections(skipRenderCrumbs=false){
+    state.selectedYear = null;
+    state.selectedSem = null;
+    state.selectedCourse = null;
+    state.currentAssignId = null;
+    state.currentAssignName = "";
+    if (!skipRenderCrumbs) renderCrumbs();
+    // hide deeper sections
+    document.getElementById("semesters").classList.add("hidden");
+    document.getElementById("courses").classList.add("hidden");
+    document.getElementById("assignments").classList.add("hidden");
+    document.getElementById("submissions").classList.add("hidden");
+  }
+
+  function renderCrumbs(){
+    const box = document.getElementById("crumbsBox");
+    const year = document.getElementById("crumbYear");
+    const sem = document.getElementById("crumbSem");
+    const course = document.getElementById("crumbCourse");
+    const assign = document.getElementById("crumbAssign");
+    let any = false;
+
+    if (state.selectedYear){ year.textContent = "שנה: " + state.selectedYear; year.classList.remove("hidden"); any = true; }
+    else year.classList.add("hidden");
+
+    if (state.selectedSem){ sem.textContent = "סמסטר: " + state.selectedSem; sem.classList.remove("hidden"); any = true; }
+    else sem.classList.add("hidden");
+
+    if (state.selectedCourse){ course.textContent = "קורס: " + (state.selectedCourse.fullname || state.selectedCourse.shortname); course.classList.remove("hidden"); any = true; }
+    else course.classList.add("hidden");
+
+    if (state.currentAssignId){ assign.textContent = "מטלה: " + state.currentAssignName; assign.classList.remove("hidden"); any = true; }
+    else assign.classList.add("hidden");
+
+    box.classList.toggle("hidden", !any);
+  }
+
   function renderYears(){
     const yearsBar = document.getElementById("yearsBar");
     const yearsEmpty = document.getElementById("yearsEmpty");
@@ -249,7 +326,14 @@
       const btn = document.createElement("button");
       btn.className = "pill";
       btn.textContent = y;
-      btn.onclick = ()=> { state.selectedYear = y; renderSemesters(groups.get(y)); };
+      btn.onclick = ()=> {
+        state.selectedYear = y;
+        renderCrumbs();
+        // mark selected
+        document.querySelectorAll("#yearsBar .pill").forEach(p=>p.classList.remove("selected"));
+        btn.classList.add("selected");
+        renderSemesters(groups.get(y));
+      };
       yearsBar.appendChild(btn);
     });
   }
@@ -260,20 +344,29 @@
     document.getElementById("courses").classList.add("hidden");
     document.getElementById("assignments").classList.add("hidden");
     document.getElementById("submissions").classList.add("hidden");
-    document.getElementById("semsBar").innerHTML = "";
+    const semBar = document.getElementById("semsBar");
+    semBar.innerHTML = "";
 
-    const semGroups = new Map(); // sem -> [courses]
+    const order = ["סמסטר א","סמסטר ב","סמסטר ק","סמסטר ש","לא מוגדר"];
+    const semGroups = new Map(order.map(s=>[s, []]));
     courses.forEach(c=>{
       const s = detectSemesterLabel(c.fullname || c.shortname || "");
-      if(!semGroups.has(s)) semGroups.set(s,[]);
-      semGroups.get(s).push(c);
+      semGroups.get(s ?? "לא מוגדר").push(c);
     });
-    Array.from(semGroups.keys()).forEach(s=>{
+
+    order.forEach(s=>{
+      if (!semGroups.get(s) || semGroups.get(s).length===0) return;
       const btn = document.createElement("button");
       btn.className = "pill";
       btn.textContent = s;
-      btn.onclick = ()=> { state.selectedSem = s; renderCourses(semGroups.get(s)); };
-      document.getElementById("semsBar").appendChild(btn);
+      btn.onclick = ()=> {
+        state.selectedSem = s;
+        renderCrumbs();
+        document.querySelectorAll("#semsBar .pill").forEach(p=>p.classList.remove("selected"));
+        btn.classList.add("selected");
+        renderCourses(semGroups.get(s));
+      };
+      semBar.appendChild(btn);
     });
   }
 
@@ -288,13 +381,18 @@
       const btn = document.createElement("button");
       btn.className = "pill";
       btn.textContent = c.fullname || c.shortname || ("קורס " + c.id);
-      btn.onclick = ()=> openCourse(c);
+      btn.onclick = ()=> openCourse(c, btn);
       bar.appendChild(btn);
     });
   }
 
-  async function openCourse(course){
+  async function openCourse(course, btnEl){
     state.selectedCourse = course;
+    renderCrumbs();
+    // mark selected
+    document.querySelectorAll("#coursesBar .pill").forEach(p=>p.classList.remove("selected"));
+    if (btnEl) btnEl.classList.add("selected");
+
     document.getElementById("assignList").innerHTML = "<div class='loader'>טוען מטלות…</div>";
     document.getElementById("assignments").classList.remove("hidden");
     document.getElementById("submissions").classList.add("hidden");
@@ -318,7 +416,9 @@
       let html = "<table><thead><tr><th>שם מטלה</th><th class='nowrap'>פתיחה</th><th class='nowrap'>דדליין</th></tr></thead><tbody>";
       assigns.forEach(a=>{
         html += `<tr>
-          <td><button class="btn secondary" onclick="loadSubmissions(${a.id}, '${escapeHtml(a.name)}')">${escapeHtml(a.name)}</button></td>
+          <td>
+            <button class="btn secondary assignBtn" data-assign-id="${a.id}" onclick="loadSubmissions(${a.id}, '${escapeHtml(a.name)}')">${escapeHtml(a.name)}</button>
+          </td>
           <td class="nowrap">${fmtDate(a.allowsubmissionsfromdate)}</td>
           <td class="nowrap">${fmtDate(a.duedate)}</td>
         </tr>`;
@@ -330,12 +430,22 @@
     }
   }
 
+  function markSelectedAssignment(assignId){
+    document.querySelectorAll(".assignBtn").forEach(b=>b.classList.remove("selected"));
+    const el = document.querySelector(`.assignBtn[data-assign-id='${assignId}']`);
+    if (el) el.classList.add("selected");
+  }
+
   async function loadSubmissions(assignId, assignName){
     state.currentAssignId = assignId;
     state.currentAssignName = assignName || "";
+    renderCrumbs();
+    markSelectedAssignment(assignId);
+
     document.getElementById("subsTitle").textContent = "הגשות במטלה: " + (assignName || "");
     document.getElementById("subsArea").innerHTML = "<div class='loader'>טוען הגשות וציונים…</div>";
     document.getElementById("submissions").classList.remove("hidden");
+    document.getElementById("subsMsg").classList.add("hidden");
     document.getElementById("subsNote").classList.add("hidden");
     document.getElementById("subsErr").classList.add("hidden");
 
@@ -362,7 +472,7 @@
         (s.plugins||[]).forEach(p=>{
           (p.fileareas||[]).forEach(fa=>{
             (fa.files||[]).forEach(file=>{
-              const href = (file.fileurl || "") + "&token=" + encodeURIComponent(token);
+              const href = fileUrlWithToken(file.fileurl || "");
               files.push(`<a href="${href}" target="_blank" rel="noreferrer">${escapeHtml(file.filename || "קובץ")}</a>`);
             });
           });
@@ -371,7 +481,6 @@
         // grade + feedback
         const g = gradeMap.get(s.userid);
         const gradeText = (g && g.grade != null) ? g.grade : "–";
-        // moodle מחזיר לעתים feedbacktext ולעתים gradefordisplay (שכולל HTML)
         const feedbackHtml = g?.feedbacktext ? escapeHtml(g.feedbacktext) : (g?.gradefordisplay || "");
         const u = userMap.get(s.userid);
         const name = u?.fullname || `${s.userid}`;
@@ -386,7 +495,7 @@
             <td class="nowrap">${gradeText}</td>
             <td>${feedbackHtml || "<span class='muted'>—</span>"}</td>
             <td class="nowrap">
-              <input type="number" step="0.01" id="g_${s.userid}" style="width:85px;padding:6px;border:1px solid #d9dee6;border-radius:8px" placeholder="${gradeText==='–'?'ציון':''}">
+              <input type="number" step="0.01" id="g_${s.userid}" class="grade-input" placeholder="${gradeText==='–'?'ציון':''}">
               <button class="btn secondary" onclick="updateGrade(${assignId}, ${s.userid})">שמור</button>
             </td>
           </tr>`;
@@ -396,7 +505,7 @@
 
       // note about permissions
       document.getElementById("subsNote").textContent =
-        "עדכון ציון פועל רק אם לטוקן שלך יש הרשאות מתאימות (grading). אחרת תתקבל שגיאה מה-Moodle.";
+        "עדכון ציון פועל רק אם לטוקן שלך יש הרשאות grading במוודל. אחרת תתקבל שגיאה.";
       document.getElementById("subsNote").classList.remove("hidden");
 
     }catch(e){
@@ -413,23 +522,38 @@
     const val = (inp?.value || "").trim();
     if (!val){ alert("נא להזין ציון"); return; }
     try{
-      // ניסיון עדכון: פרמטרים נפוצים (ייתכן שב-Moodle מסוים יידרשו פרמטרים נוספים/אחרים)
-      await apiCall("mod_assign_save_grade", {
+      const params = {
         assignmentid: assignId,
         userid: userId,
         grade: val,
-        attemptnumber: -1 // ניסיון עדכני
-      });
-      alert("ניסיון עדכון בוצע. מרענן את הטבלה…");
+        attemptnumber: -1,   // עדכון הניסיון האחרון
+        addattempt: 0,
+        workflowstate: "graded",
+        applytoall: 0,
+        // חלק מהשרתים דורשים מפת מפתחות לפלאגין של משוב, לכן נשלח מפתח ריק תקין:
+        "plugindata[assignfeedbackcomments_editor][text]": "",
+        "plugindata[assignfeedbackcomments_editor][format]": 1
+      };
+      await apiCall("mod_assign_save_grade", params);
+
+      // success
+      document.getElementById("subsMsg").textContent = "הציון עודכן בהצלחה.";
+      document.getElementById("subsMsg").classList.remove("hidden");
+      // רענון טבלה
       loadSubmissions(assignId, state.currentAssignName);
     }catch(e){
-      alert("עדכון ציון נכשל: " + e.message + "\n(ייתכן שחסרות הרשאות לטוקן או שנדרשים פרמטרים נוספים בשרת)");
+      alert("עדכון ציון נכשל: " + e.message + "\nייתכן שלטוקן חסרות הרשאות או שהשרת דורש פרמטרים נוספים.");
     }
   }
 
   // ======= helpers =======
-  function escapeHtml(s){
-    return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  function escapeHtml(s){ return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+
+  // מוסיף token ל-URL של הקובץ בצורה בטוחה (עם ? או & בהתאם)
+  function fileUrlWithToken(url){
+    if (!url) return "#";
+    if (url.includes("token=")) return url;
+    return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
   }
 </script>
 </body>
