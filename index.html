@@ -305,7 +305,6 @@ async function getFeedback(aid,uid){
 
 async function getAssignmentDetails(assignmentId) {
   try {
-    // קבלת פרטי המטלה
     const assignData = await apiCall("mod_assign_get_assignments", {"courseids[0]": state.selectedCourse.id});
     const assignment = assignData.courses?.[0]?.assignments?.find(a => a.id == assignmentId);
     
@@ -313,71 +312,84 @@ async function getAssignmentDetails(assignmentId) {
 
     console.log("Assignment details:", assignment);
 
-    // בדיקה אם המטלה משתמשת בשיטת ציון מתקדמת (מחוון/guide)
+    // אם רואים מחוון בממשק (כמו שאתה רואה), זה אומר שיש מחוון במטלה
+    // בואו ננסה לבנות את הקריטריונים מהמידע שאנחנו כבר רואים
     let rubricData = [];
     
-    // בדוק אם יש הגדרה של advanced grading או marking guide
-    if (assignment.advancedgrading || assignment.markingguide || 
-        (assignment.configs && assignment.configs.some(c => c.plugin === 'rubric' || c.plugin === 'guide')) ||
-        (assignment.grade && assignment.grade > 100)) { // ציון גבוה מ-100 עשוי להצביע על מחוון
+    // מכיוון שאתה רואה את המחוון בממשק, זה אומר שהוא קיים
+    // בואו נזהה את זה מתוך הנתונים שכבר יש לנו או ננסה API אחר
+    
+    try {
+      // נסה לקבל מידע על המטלה בצורה אחרת
+      const submissions = await apiCall("mod_assign_get_submissions", {"assignmentids[0]": assignmentId});
+      const subs = submissions.assignments?.[0]?.submissions || [];
       
-      console.log("Found potential advanced grading setup");
-      
-      // נסה למצוא מידע על המחוון ממטלה עם ציון קיים
-      try {
-        const grades = await apiCall("mod_assign_get_grades", {"assignmentids[0]": assignmentId});
-        const gradesWithFeedback = (grades.assignments?.[0]?.grades || []).filter(g => g.gradeddate);
+      // נבדוק אם יש הגשות עם ציונים ונחפש שם מחוון
+      for (const sub of subs.slice(0, 3)) {
+        const rubricFeedback = await getRubricFeedback(assignmentId, sub.userid);
+        console.log(`Detailed rubric check for user ${sub.userid}:`, rubricFeedback);
         
-        for (const grade of gradesWithFeedback.slice(0, 2)) {
-          const status = await apiCall("mod_assign_get_submission_status", {
-            assignid: assignmentId,
-            userid: grade.userid
-          });
-          
-          const plugins = status?.feedback?.plugins || [];
-          console.log(`Plugins for graded user ${grade.userid}:`, plugins.map(p => p.type));
-          
-          for (const plugin of plugins) {
-            // חפש פלאגין של מחוון או guide
-            if (plugin.type && (plugin.type.includes('rubric') || plugin.type.includes('guide') || 
-                                plugin.type.includes('gradingform') || plugin.type === 'grading')) {
-              
-              console.log(`Found grading plugin: ${plugin.type}`, plugin);
-              
-              if (plugin.criterias || plugin.criteria) {
-                const criteria = plugin.criterias || plugin.criteria;
-                console.log("Criteria found:", criteria);
-                
-                if (Array.isArray(criteria)) {
-                  criteria.forEach((criterion, index) => {
-                    rubricData.push({
-                      id: criterion.id || criterion.criterionid || index,
-                      shortname: criterion.shortname || criterion.description || `קריטריון ${index + 1}`,
-                      description: criterion.description || "",
-                      maxscore: criterion.maxscore || criterion.levels?.reduce((max, level) => Math.max(max, level.score || 0), 0) || '?'
-                    });
-                  });
-                } else if (typeof criteria === 'object') {
-                  Object.entries(criteria).forEach(([key, criterion]) => {
-                    rubricData.push({
-                      id: key,
-                      shortname: criterion.shortname || criterion.description || `קריטריון ${rubricData.length + 1}`,
-                      description: criterion.description || "",
-                      maxscore: criterion.maxscore || '?'
-                    });
-                  });
-                }
-                
-                if (rubricData.length > 0) break;
-              }
+        if (Object.keys(rubricFeedback).length > 0) {
+          // אם מצאנו משוב מחוון, בנה קריטריונים מזה
+          Object.entries(rubricFeedback).forEach(([id, data]) => {
+            if (!rubricData.find(r => r.id == id)) {
+              rubricData.push({
+                id: id,
+                shortname: `קריטריון ${id}`,
+                description: '',
+                maxscore: '?'
+              });
             }
-          }
+          });
           
           if (rubricData.length > 0) break;
         }
-      } catch (e) {
-        console.log("Error detecting rubric from graded submissions:", e);
       }
+      
+      // אם עדיין לא מצאנו, אבל אנחנו יודעים שיש מחוון (כי אתה רואה אותו)
+      // בואו ניצור קריטריונים מהמידע שרואים בממשק
+      if (rubricData.length === 0) {
+        // מכיוון שאתה רואה: תוכן (40), קישוריות (20), עיצוב (20), אסתטיקה (20)
+        // זה אומר שהמחוון קיים, אז בואו ננסה ליצור אותו ידנית מהמידע הזמין
+        
+        // נסה לחלץ מידע מהמטלה עצמה או מתוצאות קיימות
+        const grades = await apiCall("mod_assign_get_grades", {"assignmentids[0]": assignmentId});
+        const allGrades = grades.assignments?.[0]?.grades || [];
+        
+        console.log("All grades for rubric detection:", allGrades.length);
+        
+        // אם יש ציונים, נסה לקבל פרטים מהראשון
+        if (allGrades.length > 0) {
+          const firstGradeStatus = await apiCall("mod_assign_get_submission_status", {
+            assignid: assignmentId,
+            userid: allGrades[0].userid
+          });
+          
+          console.log("First user full status:", firstGradeStatus);
+          
+          // חפש בכל המקומות האפשריים
+          if (firstGradeStatus.feedback?.plugins) {
+            firstGradeStatus.feedback.plugins.forEach(plugin => {
+              console.log("Detailed plugin analysis:", plugin.type, plugin);
+              
+              // בדוק אם יש criterias בכל פלאגין
+              if (plugin.criterias || plugin.criteria) {
+                console.log("FOUND CRITERIAS!", plugin.criterias || plugin.criteria);
+              }
+              
+              // בדוק בנתונים אחרים
+              Object.keys(plugin).forEach(key => {
+                if (key.includes('criteri') || key.includes('rubric') || key.includes('grade')) {
+                  console.log(`Potential rubric data in ${key}:`, plugin[key]);
+                }
+              });
+            });
+          }
+        }
+      }
+      
+    } catch (e) {
+      console.log("Error in rubric detection:", e);
     }
     
     console.log("Final detected rubric criteria:", rubricData);
