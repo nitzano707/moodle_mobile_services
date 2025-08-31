@@ -1,110 +1,564 @@
-<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>Moodle API Explorer</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
-    .hidden { display: none; }
-    button { margin: 5px; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
-    #result { white-space: pre-wrap; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; margin-top: 10px; max-height: 400px; overflow-y: auto; }
-    #home { margin-top: 20px; }
-  </style>
-</head>
-<body>
-  <h1>🔑 חיבור ל־Moodle API</h1>
+import React, { useEffect, useMemo, useState } from "react";
 
-  <!-- מסך כניסת טוקן -->
-  <div id="loginScreen">
-    <label for="tokenInput">הכנס Token:</label>
-    <input type="text" id="tokenInput" size="60">
-    <br><br>
-    <label for="urlInput">כתובת האתר (ללא /webservice/...):</label>
-    <input type="text" id="urlInput" size="60" placeholder="https://www.talpiot.ac.il">
-    <br><br>
-    <button onclick="saveToken()">שמור והמשך</button>
-  </div>
+// ------------------------------
+// Moodle API Explorer (Hierarchical / RTL)
+// Single-file React component. Tailwind-friendly.
+// Stores base URL + token (and optional proxy) in localStorage.
+// Hierarchy: שנה/סמסטר → קורס → מטלות → הגשות → קבצים/ציונים → סטודנטים
+// ------------------------------
 
-  <!-- מסך ראשי -->
-  <div id="mainScreen" class="hidden">
-    <h2>📌 בחר פונקציה</h2>
-    <div id="functions"></div>
-    <div id="result"></div>
-    <div id="home">
-      <button onclick="goHome()">🏠 חזרה</button>
-      <button onclick="deleteToken()">🗑️ מחק Token</button>
-    </div>
-  </div>
+// ---- Utilities ----
+const LS_KEYS = {
+  url: "moodleUrl",
+  token: "moodleToken",
+  proxy: "moodleProxy",
+  debug: "moodleDebug",
+};
 
-  <script>
-    const functionsList = [
-      {name: "מידע על האתר", func: "core_webservice_get_site_info"},
-      {name: "קורסים לפי מזהה", func: "core_course_get_courses_by_field&field=id&value=1"},
-      {name: "תכני קורסים", func: "core_course_get_contents&courseid=1"},
-      {name: "מטלות", func: "mod_assign_get_assignments"},
-      {name: "משתמשים לפי אימייל", func: "core_user_get_users_by_field&field=email&values[0]=test@example.com"}
-    ];
+function saveLS(key, value) {
+  localStorage.setItem(key, value ?? "");
+}
+function readLS(key, fallback = "") {
+  const v = localStorage.getItem(key);
+  return v === null ? fallback : v;
+}
 
-    const loginScreen = document.getElementById("loginScreen");
-    const mainScreen = document.getElementById("mainScreen");
-    const functionsDiv = document.getElementById("functions");
-    const resultDiv = document.getElementById("result");
+// Semester / Year heuristics
+function detectYear(str) {
+  if (!str) return null;
+  const m = String(str).match(/(20\d{2})/);
+  return m ? m[1] : null;
+}
+function detectSemester(str) {
+  if (!str) return null;
+  const s = String(str);
+  if (/סמסטר\s*א/.test(s) || /Semester\s*A/i.test(s) || /Sem\s*A/i.test(s)) return "א";
+  if (/סמסטר\s*ב/.test(s) || /Semester\s*B/i.test(s) || /Sem\s*B/i.test(s)) return "ב";
+  if (/spring/i.test(s)) return "אביב";
+  if (/fall|autumn/i.test(s)) return "סתיו";
+  return null;
+}
 
-    // טוען טוקן מה-localStorage
-    window.onload = () => {
-      if (localStorage.getItem("moodleToken") && localStorage.getItem("moodleUrl")) {
-        showMain();
-      }
-    };
+// ---- API Layer ----
+async function moodleApiCall({ baseUrl, token, proxy, wsfunction, params = {} }) {
+  if (!baseUrl || !token) throw new Error("Missing baseUrl or token");
 
-    function saveToken() {
-      const token = document.getElementById("tokenInput").value.trim();
-      const url = document.getElementById("urlInput").value.trim();
-      if (!token || !url) {
-        alert("נא להזין טוקן וכתובת אתר");
-        return;
-      }
-      localStorage.setItem("moodleToken", token);
-      localStorage.setItem("moodleUrl", url);
-      showMain();
+  // Build query
+  const q = new URLSearchParams();
+  q.set("wstoken", token);
+  q.set("wsfunction", wsfunction);
+  q.set("moodlewsrestformat", "json");
+  // params may include keys like "courseids[0]": 2
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) q.append(k, String(v));
+  });
+
+  const serverPath = `/webservice/rest/server.php?${q.toString()}`;
+  const fullUrl = proxy ? `${proxy.replace(/\/$/, "")}${baseUrl}${serverPath}` : `${baseUrl}${serverPath}`;
+
+  const res = await fetch(fullUrl, { method: "GET" });
+  const data = await res.json();
+  // Moodle errors come back as JSON with keys: exception, errorcode, message
+  if (data && (data.exception || data.errorcode)) {
+    const msg = `${data.exception || data.errorcode}: ${data.message || ""}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// Helper: safe get nested
+const get = (obj, path, def) => {
+  try {
+    return path.split(".").reduce((o, k) => (o ? o[k] : undefined), obj) ?? def;
+  } catch (e) {
+    return def;
+  }
+};
+
+// ---- Main Component ----
+export default function MoodleExplorer() {
+  const [baseUrl, setBaseUrl] = useState(readLS(LS_KEYS.url, "https://moodle4.talpiot.ac.il"));
+  const [token, setToken] = useState(readLS(LS_KEYS.token));
+  const [proxy, setProxy] = useState(readLS(LS_KEYS.proxy, ""));
+  const [debug, setDebug] = useState(readLS(LS_KEYS.debug, "0") === "1");
+
+  const [siteInfo, setSiteInfo] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Data
+  const [courses, setCourses] = useState([]); // my courses
+  const [selectedYear, setSelectedYear] = useState("הכל");
+  const [selectedSem, setSelectedSem] = useState("הכל");
+  const [selectedCourse, setSelectedCourse] = useState(null);
+
+  const [courseAssignments, setCourseAssignments] = useState([]);
+  const [courseStudents, setCourseStudents] = useState([]); // full objects
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [assignmentSubmissions, setAssignmentSubmissions] = useState([]);
+  const [assignmentGrades, setAssignmentGrades] = useState([]);
+
+  // Derived indexes
+  const studentsById = useMemo(() => {
+    const map = new Map();
+    courseStudents.forEach((u) => map.set(u.id, u));
+    return map;
+  }, [courseStudents]);
+
+  const gradesByUser = useMemo(() => {
+    const map = new Map();
+    const items = get(assignmentGrades, "grades", []);
+    items.forEach((g) => map.set(g.userid, g));
+    return map;
+  }, [assignmentGrades]);
+
+  const courseDecorated = useMemo(() => {
+    return courses.map((c) => ({
+      ...c,
+      _year: detectYear(c.fullname || c.shortname),
+      _sem: detectSemester(c.fullname || c.shortname) || detectSemester(c.shortname || ""),
+    }));
+  }, [courses]);
+
+  const years = useMemo(() => {
+    const s = new Set();
+    courseDecorated.forEach((c) => c._year && s.add(c._year));
+    return ["הכל", ...Array.from(s).sort().reverse()];
+  }, [courseDecorated]);
+
+  const semesters = useMemo(() => {
+    const s = new Set();
+    courseDecorated.forEach((c) => c._sem && s.add(c._sem));
+    return ["הכל", ...Array.from(s)];
+  }, [courseDecorated]);
+
+  const filteredCourses = useMemo(() => {
+    return courseDecorated.filter((c) => {
+      const okYear = selectedYear === "הכל" || c._year === selectedYear;
+      const okSem = selectedSem === "הכל" || c._sem === selectedSem;
+      return okYear && okSem;
+    });
+  }, [courseDecorated, selectedYear, selectedSem]);
+
+  // Initialization: if token+url exist, auto validate
+  useEffect(() => {
+    if (token && baseUrl) {
+      void validateConnection();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    function showMain() {
-      loginScreen.classList.add("hidden");
-      mainScreen.classList.remove("hidden");
-      functionsDiv.innerHTML = "";
-      functionsList.forEach(item => {
-        const btn = document.createElement("button");
-        btn.textContent = item.name;
-        btn.onclick = () => callFunction(item.func);
-        functionsDiv.appendChild(btn);
+  async function validateConnection()() {}
+  async function validateConnection() {
+    setError("");
+    setLoading(true);
+    try {
+      const info = await moodleApiCall({ baseUrl, token, proxy, wsfunction: "core_webservice_get_site_info" });
+      setSiteInfo(info);
+      // Fetch my courses (for the token user)
+      const myCourses = await moodleApiCall({
+        baseUrl,
+        token,
+        proxy,
+        wsfunction: "core_enrol_get_users_courses",
+        params: { userid: info.userid },
       });
+      setCourses(Array.isArray(myCourses) ? myCourses : []);
+      saveLS(LS_KEYS.url, baseUrl);
+      saveLS(LS_KEYS.token, token);
+      saveLS(LS_KEYS.proxy, proxy);
+      saveLS(LS_KEYS.debug, debug ? "1" : "0");
+    } catch (e) {
+      console.error(e);
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
     }
+  }
 
-    async function callFunction(func) {
-      const token = localStorage.getItem("moodleToken");
-      const url = localStorage.getItem("moodleUrl");
-      resultDiv.textContent = "⏳ מבצע קריאה ל־API...";
-      try {
-        const res = await fetch(`${url}/webservice/rest/server.php?wstoken=${token}&wsfunction=${func}&moodlewsrestformat=json`);
-        const data = await res.json();
-        resultDiv.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        resultDiv.textContent = "❌ שגיאה: " + err;
-      }
-    }
+  async function openCourse(c) {
+    setSelectedCourse(c);
+    setSelectedAssignment(null);
+    setAssignmentSubmissions([]);
+    setAssignmentGrades([]);
+    setCourseAssignments([]);
+    setCourseStudents([]);
+    setError("");
+    setLoading(true);
+    try {
+      // Assignments in this course
+      const assignsData = await moodleApiCall({
+        baseUrl,
+        token,
+        proxy,
+        wsfunction: "mod_assign_get_assignments",
+        params: { "courseids[0]": c.id },
+      });
+      const assigns = get(assignsData, "courses.0.assignments", []);
+      setCourseAssignments(assigns);
 
-    function goHome() {
-      resultDiv.textContent = "";
-      window.scrollTo(0, 0);
+      // Enrolled users (students + others)
+      const users = await moodleApiCall({
+        baseUrl,
+        token,
+        proxy,
+        wsfunction: "core_enrol_get_enrolled_users",
+        params: { courseid: c.id },
+      });
+      setCourseStudents(Array.isArray(users) ? users : []);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
     }
+  }
 
-    function deleteToken() {
-      localStorage.removeItem("moodleToken");
-      localStorage.removeItem("moodleUrl");
-      mainScreen.classList.add("hidden");
-      loginScreen.classList.remove("hidden");
+  async function openAssignment(a) {
+    setSelectedAssignment(a);
+    setError("");
+    setLoading(true);
+    setAssignmentSubmissions([]);
+    setAssignmentGrades([]);
+    try {
+      // Submissions
+      const subsData = await moodleApiCall({
+        baseUrl,
+        token,
+        proxy,
+        wsfunction: "mod_assign_get_submissions",
+        params: { "assignmentids[0]": a.id },
+      });
+      const submissions = get(subsData, "assignments.0.submissions", []);
+      setAssignmentSubmissions(submissions);
+
+      // Grades
+      const gradesData = await moodleApiCall({
+        baseUrl,
+        token,
+        proxy,
+        wsfunction: "mod_assign_get_grades",
+        params: { "assignmentids[0]": a.id },
+      });
+      const grades = get(gradesData, "assignments.0.grades", []);
+      setAssignmentGrades({ grades });
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
     }
-  </script>
-</body>
-</html>
+  }
+
+  function logout() {
+    setSiteInfo(null);
+    setCourses([]);
+    setSelectedCourse(null);
+    setSelectedAssignment(null);
+    setCourseAssignments([]);
+    setCourseStudents([]);
+    setAssignmentSubmissions([]);
+    setAssignmentGrades([]);
+    localStorage.removeItem(LS_KEYS.url);
+    localStorage.removeItem(LS_KEYS.token);
+    localStorage.removeItem(LS_KEYS.proxy);
+  }
+
+  // Render helpers
+  function Label({ children }) {
+    return <div className="text-sm text-gray-600 mb-1">{children}</div>;
+  }
+
+  function Section({ title, children, right }) {
+    return (
+      <div className="bg-white rounded-2xl shadow p-4 mb-4 border">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          {right}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  function Pill({ children }) {
+    return <span className="inline-block text-xs bg-gray-100 px-2 py-1 rounded-full ml-2">{children}</span>;
+  }
+
+  function FileLink({ file }) {
+    // Moodle typically returns fileurl (already tokenized). Fallback: show name only.
+    const href = file.fileurl || file.url || "";
+    return (
+      <a
+        className="underline break-all"
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={file.filename}
+      >
+        {file.filename || "קובץ"}
+      </a>
+    );
+  }
+
+  // ---- UI ----
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900" dir="rtl">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <header className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Moodle API Explorer — מרצה</h1>
+          <div className="flex items-center gap-2">
+            {siteInfo && (
+              <>
+                <span className="text-sm text-gray-600">מחובר כ־<b>{siteInfo.fullname || siteInfo.username}</b></span>
+                <button className="px-3 py-1 rounded-xl border" onClick={() => setDebug((d) => { const nd = !d; saveLS(LS_KEYS.debug, nd ? "1" : "0"); return nd; })}>
+                  {debug ? "מצב תצוגת JSON: פעיל" : "הצג JSON"}
+                </button>
+                <button className="px-3 py-1 rounded-xl border" onClick={logout}>התנתק / מחק טוקן</button>
+              </>
+            )}
+          </div>
+        </header>
+
+        {!siteInfo && (
+          <Section title="כניסה עם Token">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label>כתובת מוודל (ללא סיומות)</Label>
+                <input
+                  className="w-full border rounded-xl p-2"
+                  placeholder="https://moodle4.talpiot.ac.il"
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value.trim())}
+                />
+              </div>
+              <div>
+                <Label>Token של Mobile Web Services</Label>
+                <input
+                  className="w-full border rounded-xl p-2"
+                  placeholder="‎xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value.trim())}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Proxy (לא חובה, למקרה של CORS) — לדוגמה: https://your-proxy.example.com</Label>
+                <input
+                  className="w-full border rounded-xl p-2"
+                  placeholder="(ריק כברירת מחדל)"
+                  value={proxy}
+                  onChange={(e) => setProxy(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                className="px-4 py-2 rounded-2xl bg-blue-600 text-white disabled:opacity-50"
+                disabled={loading}
+                onClick={validateConnection}
+              >
+                {loading ? "מתחבר..." : "שמירה והתחברות"}
+              </button>
+              {error && <div className="text-red-600 text-sm">{error}</div>}
+              <div className="text-xs text-gray-500 ml-auto">הטוקן נשמר מקומית ב־localStorage בדפדפן שלך.</div>
+            </div>
+          </Section>
+        )}
+
+        {siteInfo && (
+          <div className="grid md:grid-cols-4 gap-4">
+            {/* Sidebar Filters */}
+            <div className="md:col-span-1">
+              <Section title="מסננים">
+                <Label>שנה</Label>
+                <select className="w-full border rounded-xl p-2 mb-3" value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)}>
+                  {years.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+                <Label>סמסטר</Label>
+                <select className="w-full border rounded-xl p-2" value={selectedSem} onChange={(e) => setSelectedSem(e.target.value)}>
+                  {semesters.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </Section>
+
+              {selectedCourse && (
+                <Section title="ניווט">
+                  <div className="flex flex-col gap-2">
+                    <button className="px-3 py-2 rounded-xl border" onClick={() => setSelectedCourse(null)}>חזרה לקורסים</button>
+                    {selectedAssignment && (
+                      <button className="px-3 py-2 rounded-xl border" onClick={() => setSelectedAssignment(null)}>חזרה למטלות</button>
+                    )}
+                  </div>
+                </Section>
+              )}
+
+              {debug && (
+                <Section title="JSON Debug">
+                  <details className="mb-2"><summary className="cursor-pointer">siteInfo</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(siteInfo, null, 2)}</pre></details>
+                  <details className="mb-2"><summary className="cursor-pointer">courses</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(courses, null, 2)}</pre></details>
+                  {selectedCourse && (
+                    <>
+                      <details className="mb-2"><summary className="cursor-pointer">assignments</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(courseAssignments, null, 2)}</pre></details>
+                      <details className="mb-2"><summary className="cursor-pointer">students</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(courseStudents, null, 2)}</pre></details>
+                    </>
+                  )}
+                  {selectedAssignment && (
+                    <>
+                      <details className="mb-2"><summary className="cursor-pointer">submissions</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(assignmentSubmissions, null, 2)}</pre></details>
+                      <details className="mb-2"><summary className="cursor-pointer">grades</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(assignmentGrades, null, 2)}</pre></details>
+                    </>
+                  )}
+                </Section>
+              )}
+            </div>
+
+            {/* Main Panel */}
+            <div className="md:col-span-3">
+              {!selectedCourse && (
+                <Section title="הקורסים שלי" right={<Pill>{filteredCourses.length} קורסים</Pill>}>
+                  {loading && <div className="text-sm">טוען...</div>}
+                  {!loading && filteredCourses.length === 0 && <div className="text-sm text-gray-600">לא נמצאו קורסים בהתאמה למסננים</div>}
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {filteredCourses.map((c) => (
+                      <button key={c.id} onClick={() => openCourse(c)} className="text-right bg-white border rounded-2xl shadow-sm p-4 hover:shadow transition">
+                        <div className="font-semibold mb-1">{c.fullname || c.shortname}</div>
+                        <div className="text-xs text-gray-600">מזהה קורס: {c.id}</div>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {c._year && <Pill>שנה: {c._year}</Pill>}
+                          {c._sem && <Pill>סמסטר: {c._sem}</Pill>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {selectedCourse && !selectedAssignment && (
+                <>
+                  <Section title={`קורס: ${selectedCourse.fullname || selectedCourse.shortname}`} right={<Pill>קוד: {selectedCourse.id}</Pill>}>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="font-semibold mb-2">מטלות</div>
+                        {loading && <div className="text-sm">טוען מטלות...</div>}
+                        {!loading && courseAssignments.length === 0 && <div className="text-sm text-gray-600">אין מטלות להצגה</div>}
+                        <div className="flex flex-col gap-2">
+                          {courseAssignments.map((a) => (
+                            <button key={a.id} className="text-right border rounded-xl p-3 hover:bg-slate-50" onClick={() => openAssignment(a)}>
+                              <div className="font-medium">{a.name}</div>
+                              <div className="text-xs text-gray-600">ID: {a.id}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="font-semibold mb-2">סטודנטים בקורס</div>
+                        {loading && <div className="text-sm">טוען סטודנטים...</div>}
+                        {!loading && courseStudents.length === 0 && <div className="text-sm text-gray-600">אין נתונים או שאין לך הרשאה</div>}
+                        <div className="max-h-72 overflow-auto border rounded-xl">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-slate-100">
+                                <th className="p-2 text-right">שם</th>
+                                <th className="p-2 text-right">אימייל</th>
+                                <th className="p-2 text-right">ID</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {courseStudents.map((u) => (
+                                <tr key={u.id} className="border-t">
+                                  <td className="p-2">{u.fullname || `${u.firstname || ""} ${u.lastname || ""}`}</td>
+                                  <td className="p-2 break-all">{u.email}</td>
+                                  <td className="p-2">{u.id}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </Section>
+                </>
+              )}
+
+              {selectedCourse && selectedAssignment && (
+                <Section title={`מטלה: ${selectedAssignment.name}`} right={<Pill>ID: {selectedAssignment.id}</Pill>}>
+                  <div className="mb-3 text-sm text-gray-700">
+                    תאריך פתיחה: {new Date(selectedAssignment.allowsubmissionsfromdate * 1000).toLocaleString() || "-"} · דדליין: {selectedAssignment.duedate ? new Date(selectedAssignment.duedate * 1000).toLocaleString() : "—"}
+                  </div>
+
+                  {loading && <div className="text-sm">טוען הגשות וציונים...</div>}
+
+                  <div className="overflow-auto border rounded-xl">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          <th className="p-2 text-right">סטודנט</th>
+                          <th className="p-2 text-right">מצב</th>
+                          <th className="p-2 text-right">קבצים</th>
+                          <th className="p-2 text-right">ציון</th>
+                          <th className="p-2 text-right">הערות</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assignmentSubmissions.map((s) => {
+                          const u = studentsById.get(s.userid) || { fullname: `User ${s.userid}` };
+                          const gradeObj = gradesByUser.get(s.userid);
+
+                          // Collect files from submission plugins
+                          const files = [];
+                          const plugins = get(s, "plugins", []);
+                          plugins.forEach((p) => {
+                            const areas = get(p, "fileareas", []);
+                            areas.forEach((fa) => {
+                              const f = get(fa, "files", []);
+                              f.forEach((file) => files.push(file));
+                            });
+                          });
+
+                          const status = s.status || (s.timecreated ? "הוגש" : "—");
+                          const grade = gradeObj ? (gradeObj.grade !== null ? gradeObj.grade : "—") : "—";
+                          const feedback = get(gradeObj, "gradefordisplay", "");
+
+                          return (
+                            <tr key={s.id} className="border-t align-top">
+                              <td className="p-2 min-w-[180px]">
+                                <div className="font-medium">{u.fullname}</div>
+                                <div className="text-xs text-gray-600">ID: {u.id}</div>
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{status}</td>
+                              <td className="p-2">
+                                {files.length === 0 && <span className="text-gray-500">—</span>}
+                                <ul className="list-disc mr-5 space-y-1">
+                                  {files.map((file) => (
+                                    <li key={file.fileurl || file.filename}>
+                                      <FileLink file={file} /> {" "}
+                                      <span className="text-xs text-gray-500">({Math.round((file.filesize || 0) / 1024)} KB)</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </td>
+                              <td className="p-2 whitespace-nowrap">{grade}</td>
+                              <td className="p-2 min-w-[160px]">
+                                <div className="text-xs whitespace-pre-wrap">{feedback || ""}</div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Section>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer Help */}
+        <div className="mt-8 text-xs text-gray-500">
+          הערות: ייתכן שתידרש הפעלת Web Services ו/או הגדרות CORS בצד ה־Moodle. ניתן להיעזר בפרוקסי אם הדפדפן חוסם.
+        </div>
+      </div>
+    </div>
+  );
+}
