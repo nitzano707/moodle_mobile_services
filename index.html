@@ -43,7 +43,9 @@
     .floating-message.error{background:#f44336;}
     .grade-input{width:70px;padding:6px;border:1px solid #d9dee6;border-radius:8px}
     .fb-input{width:100%;min-width:200px;padding:6px;border:1px solid #d9dee6;border-radius:8px}
-    .rubric{margin-top:8px;background:#f9fbff;border:1px dashed #cfe0ff;border-radius:8px;padding:8px}
+    .rubric-score{font-weight:bold;color:#1976d2;margin-bottom:4px;}
+    .rubric-feedback{width:100%;min-height:40px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.85em;resize:vertical;}
+    .criterion-cell{font-size:0.9em;vertical-align:top;border-left:2px solid #e3f2fd;padding:8px;min-width:140px;}
     footer{margin:30px auto 40px;text-align:center;color:#555;border-top:1px solid var(--line);padding:14px;max-width:1200px}
   </style>
 </head>
@@ -140,7 +142,8 @@
     selectedCourse: null,
     enrolled: new Map(), // courseId -> [users]
     assignId: null,
-    assignName: ""
+    assignName: "",
+    assignmentContext: null // for rubric API calls
   };
 
   // ======= BOOT =======
@@ -260,6 +263,7 @@
     state.selectedCourse = null;
     state.assignId = null;
     state.assignName = "";
+    state.assignmentContext = null;
     if (!skipRenderCrumbs) renderCrumbs();
     
     // הסר הדגשות מכל הכפתורים
@@ -416,109 +420,44 @@
       const assignData = await apiCall("mod_assign_get_assignments", {"courseids[0]": state.selectedCourse.id});
       const assignment = assignData.courses?.[0]?.assignments?.find(a => a.id == assignmentId);
       
-      if (!assignment) return { intro: "", rubric: [] };
+      if (!assignment) return { intro: "", contextid: null };
+
+      // שמירת context ID לשימוש ב-rubric API
+      state.assignmentContext = assignment.cmid; // או assignment.contextid אם קיים
 
       console.log("Assignment details:", assignment);
 
-      let rubricData = [];
-      
-      // מכיוון שאנחנו רואים מחוון בממשק, ננסה לזהות אותו
-      // אם יש הנחיות המטלה שמכילות מידע על קריטריונים או אם יש ציונים מורכבים
-      const hasRubricInDescription = assignment.intro && 
-        (assignment.intro.includes('תוכן') || 
-         assignment.intro.includes('קריטריון') || 
-         assignment.intro.includes('מחוון'));
-         
-      if (hasRubricInDescription) {
-        // אם אנחנו רואים במסך שיש מחוון עם 4 קריטריונים, נגדיר אותם
-        rubricData = [
-          { id: '1', shortname: 'תוכן', description: 'קיימים מושגים מרכיבים ומסבר אודותיהם', maxscore: 40 },
-          { id: '2', shortname: 'קישוריות', description: 'חיבורים קשרים בין מושגים', maxscore: 20 },
-          { id: '3', shortname: 'עיצוב', description: 'אין מליל רב, קיימים יצירתם וזוויתיים חותכים דקלסט', maxscore: 20 },
-          { id: '4', shortname: 'אסתטיקה', description: 'התמצאות משואות כתיב, ניקיון ברורים', maxscore: 20 }
-        ];
-        console.log("Created rubric based on interface display");
-      }
-
       return {
         intro: assignment.intro || assignment.description || "",
-        rubric: rubricData
+        contextid: state.assignmentContext
       };
       
     } catch (e) {
       console.error("Error getting assignment details:", e);
-      return { intro: "", rubric: [] };
+      return { intro: "", contextid: null };
     }
   }
 
-  async function getRubricFeedback(assignmentId, userId) {
+  async function getRubricData(assignmentId, userId) {
     try {
-      const status = await apiCall("mod_assign_get_submission_status", {
-        assignid: assignmentId,
-        userid: userId
-      });
-
-      const rubricData = {};
-      
-      // נסה לחלץ מידע מהציון הכללי ומהמשוב
-      // לפעמים הציונים של הקריטריונים מוסתרים בתוך נתונים אחרים
-      
-      // דרך 1: חפש בפלאגינים
-      const plugins = status?.feedback?.plugins || [];
-      plugins.forEach((plugin, pluginIndex) => {
-        console.log(`Plugin ${pluginIndex} for user ${userId}:`, plugin);
-        
-        // בדוק כל השדות
-        Object.keys(plugin).forEach(key => {
-          if (key.includes('criteri') || key.includes('rubric') || key.includes('grade')) {
-            console.log(`Found potential rubric data: ${key}:`, plugin[key]);
-          }
-        });
-      });
-      
-      // דרך 2: ננסה לקבל מידע מה-grader עצמו
-      try {
-        const graderData = await apiCall("mod_assign_get_user_grades", {
-          assignmentid: assignmentId,
-          userids: [userId]
-        });
-        console.log(`Grader data for user ${userId}:`, graderData);
-      } catch (e) {
-        console.log("Could not get grader data:", e);
-      }
-      
-      // דרך 3: אם אין מידע ספציפי, ננסה להעריך לפי הציון הכללי
-      const totalGrade = status?.gradingsummary?.grade;
-      if (totalGrade && totalGrade !== null) {
-        console.log(`Total grade for user ${userId}: ${totalGrade}`);
-        
-        // אם יש ציון כללי, נחלק אותו בין הקריטריונים (זו השערה)
-        // זה לא מושלם אבל זה יכול לתת לנו משהו להתחיל איתו
-        const estimatedScores = distributeGrade(totalGrade);
-        estimatedScores.forEach((score, index) => {
-          rubricData[(index + 1).toString()] = {
-            score: score,
-            remark: '' // נשאיר ריק כי אין לנו מידע ספציפי
-          };
-        });
+      if (!state.assignmentContext) {
+        console.log("No context available for rubric fetch");
+        return null;
       }
 
-      console.log(`Final rubric data for user ${userId}:`, rubricData);
+      const rubricData = await apiCall("gradingform_rubric_grader_gradingpanel_fetch", {
+        component: "mod_assign",
+        contextid: state.assignmentContext,
+        itemname: "submissions", 
+        gradeduserid: userId
+      });
+
+      console.log(`Rubric data for user ${userId}:`, rubricData);
       return rubricData;
     } catch (e) {
-      console.error(`Error getting rubric feedback for user ${userId}:`, e);
-      return {};
+      console.error(`Error getting rubric data for user ${userId}:`, e);
+      return null;
     }
-  }
-  
-  function distributeGrade(totalGrade) {
-    // פונקציה עזר שמחלקת ציון כללי בין הקריטריונים
-    // בהתבסס על המשקלים שראינו: תוכן 40, שאר 20 כל אחד
-    const total = parseInt(totalGrade) || 0;
-    const contentScore = Math.round((total * 40) / 100);
-    const otherScore = Math.round((total * 20) / 100);
-    
-    return [contentScore, otherScore, otherScore, otherScore];
   }
 
   // ======= FEEDBACK =======
@@ -546,7 +485,7 @@
     markSelectedAssignment(aid);
     
     try{
-      // קבלת פרטי המטלה כולל הנחיות ומחוון
+      // קבלת פרטי המטלה כולל context
       const assignmentDetails = await getAssignmentDetails(aid);
       
       const [subs,grades]=await Promise.all([
@@ -568,43 +507,25 @@
         </div>`;
       }
 
-      // בניית HTML עבור מחוון (אם קיים) - רק אם יש קריטריונים
-      let rubricHtml = "";
-      const rubricCriteria = assignmentDetails.rubric || [];
+      // נסה לקבל מידע על מחוון מהסטודנט הראשון
+      let rubricStructure = null;
+      let hasRubric = false;
       
-      if(rubricCriteria.length > 0) {
-        rubricHtml = `<div class="card" style="background:#fff8f0;border-color:#e6ddd4;margin-bottom:16px;">
-          <h4 style="margin:0 0 10px 0;">מחוון הערכה:</h4>
-          <table style="margin-top:10px;">
-            <thead>
-              <tr>
-                <th>קריטריון</th>
-                <th>תיאור</th>
-                <th>ניקוד מקסימלי</th>
-              </tr>
-            </thead>
-            <tbody>`;
-        
-        rubricCriteria.forEach(criterion => {
-          rubricHtml += `
-            <tr>
-              <td><strong>${criterion.shortname || 'קריטריון'}</strong></td>
-              <td>${criterion.description || ''}</td>
-              <td>${criterion.maxscore}</td>
-            </tr>`;
-        });
-        
-        rubricHtml += `</tbody></table></div>`;
+      if (submissions.length > 0 && state.assignmentContext) {
+        const firstSubmission = submissions[0];
+        rubricStructure = await getRubricData(aid, firstSubmission.userid);
+        hasRubric = rubricStructure && rubricStructure.criteria && Object.keys(rubricStructure.criteria).length > 0;
+        console.log("Has rubric:", hasRubric, rubricStructure);
       }
 
       // בניית כותרות הטבלה
       let tableHeaders = "<thead><tr><th>סטודנט</th><th>קבצים</th><th>ציון כללי</th>";
       
       // הוספת עמודות קריטריונים אם יש מחוון
-      if(rubricCriteria.length > 0) {
-        rubricCriteria.forEach(criterion => {
-          tableHeaders += `<th style="min-width:140px;max-width:200px;">
-            <div><strong>${criterion.shortname || 'קריטריון'}</strong></div>
+      if (hasRubric && rubricStructure.criteria) {
+        Object.values(rubricStructure.criteria).forEach(criterion => {
+          tableHeaders += `<th class="criterion-header" style="min-width:140px;max-width:200px;">
+            <div><strong>${criterion.description || 'קריטריון'}</strong></div>
             <div class="muted" style="font-size:0.8em;font-weight:normal;">ניקוד ומשוב</div>
           </th>`;
         });
@@ -621,10 +542,10 @@
         const grade=fmtGrade(g?.grade);
         const fb=await getFeedback(aid,s.userid);
         
-        // קבלת פרטי מחוון עבור הסטודנט - רק אם יש קריטריונים
-        let rubricFeedback = {};
-        if(rubricCriteria.length > 0) {
-          rubricFeedback = await getRubricFeedback(aid, s.userid);
+        // קבלת נתוני מחוון עבור הסטודנט
+        let userRubricData = null;
+        if (hasRubric) {
+          userRubricData = await getRubricData(aid, s.userid);
         }
         
         const files=[];s.plugins?.forEach(p=>p.fileareas?.forEach(fa=>fa.files?.forEach(f=>{
@@ -641,21 +562,30 @@
           <td style="text-align:center;"><strong>${grade}</strong></td>`;
 
         // הוספת עמודות קריטריונים - רק אם יש מחוון
-        if(rubricCriteria.length > 0) {
-          rubricCriteria.forEach(criterion => {
-            const criterionId = criterion.id;
-            const criterionData = rubricFeedback[criterionId] || {};
-            const score = criterionData.score || '—';
-            const remark = criterionData.remark || '';
+        if (hasRubric && rubricStructure.criteria && userRubricData && userRubricData.criteria) {
+          Object.entries(rubricStructure.criteria).forEach(([criterionId, criterionInfo]) => {
+            const userCriterion = userRubricData.criteria[criterionId] || {};
+            const selectedLevel = userCriterion.selectedlevelid || null;
+            const remark = userCriterion.remark || '';
             
-            tableRows += `<td style="font-size:0.9em;vertical-align:top;border-left:2px solid #e3f2fd;padding:8px;">
-              <div style="margin-bottom:6px;">
-                <strong style="color:#1976d2;font-size:1em;">ניקוד: ${score}</strong>
-                ${criterion.maxscore ? `<span class="muted" style="font-size:0.8em;"> / ${criterion.maxscore}</span>` : ''}
+            // מחפש את הציון של הרמה שנבחרה
+            let score = '—';
+            if (selectedLevel && criterionInfo.levels) {
+              const level = criterionInfo.levels.find(l => l.id == selectedLevel);
+              if (level) {
+                score = level.score || level.points || '—';
+              }
+            }
+            
+            const maxScore = criterionInfo.levels ? Math.max(...criterionInfo.levels.map(l => l.score || l.points || 0)) : '';
+            
+            tableRows += `<td class="criterion-cell">
+              <div class="rubric-score">
+                ניקוד: ${score}${maxScore ? ` / ${maxScore}` : ''}
               </div>
               <div style="border-top:1px dashed #ddd;padding-top:4px;">
                 <textarea id="rubric_${s.userid}_${criterionId}" 
-                          style="width:100%;min-height:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-size:0.85em;resize:vertical;" 
+                          class="rubric-feedback" 
                           placeholder="משוב לקריטריון זה...">${remark}</textarea>
               </div>
             </td>`;
@@ -672,7 +602,7 @@
       }
       tableRows += "</tbody>";
 
-      const finalHtml = assignmentInfoHtml + rubricHtml + `<table style="margin-top:10px;">${tableHeaders}${tableRows}</table>`;
+      const finalHtml = assignmentInfoHtml + `<table style="margin-top:10px;">${tableHeaders}${tableRows}</table>`;
       document.getElementById("subsArea").innerHTML = finalHtml;
       
     }catch(e){
@@ -705,7 +635,34 @@
         }
       });
 
-      // משתמש בפרמטרים הנכונים כמו בקוד העובד
+      // בדוק אם יש מחוון לעדכון
+      if (Object.keys(rubricFeedbacks).length > 0 && state.assignmentContext) {
+        try {
+          // בנה את נתוני המחוון לשמירה
+          const rubricData = {
+            component: "mod_assign",
+            contextid: state.assignmentContext,
+            itemname: "submissions",
+            gradeduserid: uid
+          };
+          
+          // הוסף את המשוב לכל קריטריון
+          Object.entries(rubricFeedbacks).forEach(([criterionId, feedback]) => {
+            rubricData[`advancedgradingdata[criteria][${criterionId}][remark]`] = feedback;
+          });
+
+          console.log("Saving rubric data:", rubricData);
+          
+          // שמור את נתוני המחוון
+          await apiCall("gradingform_rubric_grader_gradingpanel_store", rubricData);
+          console.log("Rubric data saved successfully");
+        } catch (rubricError) {
+          console.error("Error saving rubric data:", rubricError);
+          // המשך עם שמירת הציון הרגיל גם אם המחוון נכשל
+        }
+      }
+
+      // שמירת הציון והמשוב הכללי
       const params = {
         assignmentid: aid,
         userid: uid,
@@ -721,25 +678,10 @@
       if (grade !== "") {
         params.grade = grade;
       }
-
-      // הוסף משוב קריטריונים אם יש
-      if (Object.keys(rubricFeedbacks).length > 0) {
-        Object.entries(rubricFeedbacks).forEach(([criterionId, feedback]) => {
-          if (feedback) {
-            // ננסה פורמטים שונים למשוב מחוון
-            params[`advancedgradingdata[criteria][${criterionId}][remark]`] = feedback;
-            params[`advancedgradingdata[guide][criteria][${criterionId}][remark]`] = feedback;
-            params[`plugindata[gradingform_rubric][criterion_${criterionId}_remark]`] = feedback;
-            params[`gradingform_rubric_instance_criterion_${criterionId}_remark`] = feedback;
-          }
-        });
-        
-        console.log("Added rubric feedback params:", Object.keys(params).filter(k => k.includes('criteria') || k.includes('rubric')));
-      }
       
       console.log("API params:", params);
       
-      // שמור את הציון והמשוב
+      // שמור את הציון והמשוב הכללי
       const result = await apiCall("mod_assign_save_grade", params);
       console.log("Save grade result:", result);
       
