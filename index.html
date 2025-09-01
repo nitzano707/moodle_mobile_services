@@ -420,40 +420,10 @@
 
       console.log("Assignment details:", assignment);
 
-      let rubricData = [];
-      
-      // בדוק אם יש ציונים כדי לזהות אם זה מחוון
-      try {
-        const grades = await apiCall("mod_assign_get_grades", {"assignmentids[0]": assignmentId});
-        const allGrades = grades.assignments?.[0]?.grades || [];
-        
-        if (allGrades.length > 0) {
-          // בדוק אם יש ציון מורכב (מעל 100 או שונה)
-          const hasComplexGrading = allGrades.some(g => g.grade > 100 || (g.grade && g.grade !== 100 && g.grade !== 0));
-          
-          console.log("Complex grading detected:", hasComplexGrading);
-          
-          // אם יש הצגת מחוון בממשק (כמו שרואים), ניצור את הקריטריונים
-          if (assignment.intro && assignment.intro.includes('תוכן') || hasComplexGrading) {
-            rubricData = [
-              { id: '1', shortname: 'תוכן', description: 'קיימים מושגים מרכיבים ומסבר אודותיהם', maxscore: 40 },
-              { id: '2', shortname: 'קישוריות', description: 'חיבורים קשרים בין מושגים', maxscore: 20 },
-              { id: '3', shortname: 'עיצוב', description: 'אין מליל רב, קיימים יצירתם וזוויתיים חותכים דקלסט', maxscore: 20 },
-              { id: '4', shortname: 'אסתטיקה', description: 'התמצאות משואות כתיב, ניקיון ברורים', maxscore: 20 }
-            ];
-            
-            console.log("Created rubric manually based on interface display");
-          }
-        }
-      } catch (e) {
-        console.log("Error checking grades for rubric:", e);
-      }
-      
-      console.log("Final detected rubric criteria:", rubricData);
-
+      // רק החזרת הנחיות המטלה - לא ניצור מחוון מלאכותי
       return {
         intro: assignment.intro || assignment.description || "",
-        rubric: rubricData
+        rubric: [] // נשאיר ריק עד שנמצא מידע אמיתי על מחוון
       };
       
     } catch (e) {
@@ -472,48 +442,29 @@
       const rubricData = {};
       const plugins = status?.feedback?.plugins || [];
       
-      console.log(`Plugins for user ${userId}:`, plugins.map(p => p.type));
+      console.log(`Full status for user ${userId}:`, JSON.stringify(status, null, 2));
       
-      // חפש בכל הפלאגינים
-      plugins.forEach(plugin => {
-        // בדוק אם יש criterias או criteria
-        if (plugin.criterias || plugin.criteria) {
-          const criteria = plugin.criterias || plugin.criteria;
-          console.log(`Found criteria for user ${userId}:`, criteria);
-          
-          if (Array.isArray(criteria)) {
-            criteria.forEach((criterion, index) => {
-              const id = criterion.id || criterion.criterionid || (index + 1).toString();
-              rubricData[id] = {
-                score: criterion.score || criterion.grade || criterion.points || criterion.mark || '—',
-                remark: criterion.remark || criterion.comment || criterion.description || criterion.feedback || ''
-              };
-            });
-          } else if (typeof criteria === 'object') {
-            Object.entries(criteria).forEach(([key, criterion]) => {
-              rubricData[key] = {
-                score: criterion.score || criterion.grade || criterion.points || criterion.mark || '—',
-                remark: criterion.remark || criterion.comment || criterion.description || criterion.feedback || ''
-              };
-            });
-          }
-        }
+      // חפש בכל הפלאגינים ובכל השדות
+      plugins.forEach((plugin, pluginIndex) => {
+        console.log(`Plugin ${pluginIndex} for user ${userId}:`, plugin.type, plugin);
         
-        // בדוק גם בeditorfields אם יש מידע מובנה
-        if (plugin.editorfields) {
-          plugin.editorfields.forEach(field => {
-            if (field.text) {
-              // נסה לחלץ מידע מחוון מהטקסט
-              const rubricMatch = field.text.match(/קריטריון\s*(\d+).*?ניקוד[:\s]*(\d+)/gi);
-              if (rubricMatch) {
-                console.log(`Found rubric text for user ${userId}:`, rubricMatch);
-              }
-            }
-          });
+        // בדוק כל השדות של הפלאגין
+        Object.keys(plugin).forEach(key => {
+          const value = plugin[key];
+          if (key.includes('criteri') || key.includes('rubric') || key.includes('grade')) {
+            console.log(`Potential rubric data in plugin ${pluginIndex}.${key}:`, value);
+          }
+        });
+      });
+      
+      // חפש גם בשדות אחרים של הסטטוס
+      Object.keys(status || {}).forEach(key => {
+        const value = status[key];
+        if (key.includes('criteri') || key.includes('rubric') || key.includes('grade')) {
+          console.log(`Potential rubric data in status.${key}:`, value);
         }
       });
 
-      console.log(`Final rubric data for user ${userId}:`, rubricData);
       return rubricData;
     } catch (e) {
       console.error(`Error getting rubric feedback for user ${userId}:`, e);
